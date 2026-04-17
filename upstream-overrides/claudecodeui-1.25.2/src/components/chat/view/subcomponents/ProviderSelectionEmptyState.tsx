@@ -151,12 +151,12 @@ export default function ProviderSelectionEmptyState({
     geminiModel,
   );
 
-  /* ── New session — provider picker ── */
+  /* New session - provider picker */
   if (!selectedSession && !currentSessionId) {
     if (IS_CODEX_ONLY_HARDENED) {
       return (
         <div className="flex h-full items-center justify-center px-4">
-          <div className="w-full max-w-md rounded-2xl border border-border/50 bg-card/70 p-6 text-center shadow-sm backdrop-blur-sm">
+          <div className="mobile-card mobile-shadow w-full max-w-md p-6 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600/10">
               <SessionProviderLogo provider="codex" className="h-8 w-8" />
             </div>
@@ -205,7 +205,7 @@ export default function ProviderSelectionEmptyState({
 
     return (
       <div className="flex h-full items-center justify-center px-4">
-        <div className="w-full max-w-md">
+        <div className="mobile-card mobile-shadow w-full max-w-md p-6 sm:p-7">
           {/* Heading */}
           <div className="mb-8 text-center">
             <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
@@ -216,7 +216,7 @@ export default function ProviderSelectionEmptyState({
             </p>
           </div>
 
-          {/* Provider cards — horizontal row, equal width */}
+          {/* Provider cards - horizontal row, equal width */}
           <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5">
             {PROVIDERS.map((p) => {
               const active = provider === p.id;
@@ -260,7 +260,7 @@ export default function ProviderSelectionEmptyState({
             })}
           </div>
 
-          {/* Model picker — appears after provider is chosen */}
+          {/* Model picker - appears after provider is chosen */}
           <div
             className={`transition-all duration-200 ${provider ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}
           >
@@ -321,11 +321,11 @@ export default function ProviderSelectionEmptyState({
     );
   }
 
-  /* ── Existing session — continue prompt ── */
+  /* Existing session - continue prompt */
   if (selectedSession) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="max-w-md px-6 text-center">
+        <div className="mobile-card mobile-shadow max-w-md px-6 py-8 text-center">
           <p className="mb-1.5 text-lg font-semibold text-foreground">
             {t("session.continue.title")}
           </p>
