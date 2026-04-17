@@ -58,6 +58,8 @@ export type MainContentProps = {
   onNavigateToSession: (targetSessionId: string) => void;
   onShowSettings: () => void;
   externalMessageUpdate: number;
+  mobileSheet?: 'none' | 'more' | 'search' | 'composer-settings';
+  onMobileSheetChange?: (sheet: 'none' | 'more' | 'search' | 'composer-settings') => void;
 };
 
 export type MainContentHeaderProps = {
@@ -68,6 +70,7 @@ export type MainContentHeaderProps = {
   shouldShowTasksTab: boolean;
   isMobile: boolean;
   onMenuClick: () => void;
+  onMobileSheetChange?: (sheet: 'none' | 'more' | 'search' | 'composer-settings') => void;
 };
 
 export type MainContentStateViewProps = {

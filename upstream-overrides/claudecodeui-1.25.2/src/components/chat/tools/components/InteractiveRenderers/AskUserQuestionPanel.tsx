@@ -151,7 +151,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
         mounted ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
       }`}
     >
-      <div className="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-lg dark:border-gray-700/50 dark:bg-gray-800/90 dark:shadow-2xl">
+      <div className="mobile-card mobile-shadow relative overflow-hidden">
         {/* Accent line */}
         <div className="absolute left-0 right-0 top-0 h-[2px] bg-gradient-to-r from-blue-500 via-cyan-400 to-teal-400" />
 
@@ -173,7 +173,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                 Input required
               </span>
               {q.header && (
-                <span className="inline-flex items-center rounded border border-blue-100 bg-blue-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-blue-600 dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-400">
+                <span className="mobile-pill inline-flex items-center px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-primary">
                   {q.header}
                 </span>
               )}
@@ -320,9 +320,9 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                       e.stopPropagation();
                     }}
                     placeholder="Type your answer..."
-                    className="w-full rounded-lg border-0 bg-gray-50 px-3 py-1.5 text-[13px] text-gray-900 outline-none ring-1 ring-gray-200 transition-shadow duration-200 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-400 dark:bg-gray-900/60 dark:text-gray-100 dark:ring-gray-700 dark:placeholder:text-gray-600 dark:focus:ring-blue-500"
+                    className="w-full rounded-lg border border-border/50 bg-muted/35 px-3 py-1.5 text-[13px] text-foreground outline-none transition-shadow duration-200 placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20"
                   />
-                  <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-gray-200 bg-gray-100 px-1 py-0.5 font-mono text-[9px] text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-600">
+                  <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border/50 bg-background px-1 py-0.5 font-mono text-[9px] text-muted-foreground">
                     Enter
                   </kbd>
                 </div>
@@ -332,14 +332,14 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
         </div>
 
         {/* Footer — compact */}
-        <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/50 px-4 py-2 dark:border-gray-700/50 dark:bg-gray-800/50">
+        <div className="flex items-center justify-between gap-2 border-t border-border/40 bg-background/70 px-4 py-2">
           <button
             type="button"
             onClick={handleSkip}
-            className="text-[11px] text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           >
             {isSingle ? 'Skip' : 'Skip all'}
-            <span className="ml-1 text-[9px] text-gray-300 dark:text-gray-600">Esc</span>
+            <span className="ml-1 text-[9px] text-muted-foreground/60">Esc</span>
           </button>
 
           <div className="flex items-center gap-1.5">
@@ -347,7 +347,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setCurrentStep(s => s - 1)}
-                className="inline-flex items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-gray-600 transition-all duration-150 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
+                className="inline-flex items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-all duration-150 hover:bg-muted/50"
               >
                 <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -361,7 +361,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                 type="button"
                 onClick={handleSubmit}
                 disabled={!hasCurrentSelection && !Object.keys(buildAnswers()).length}
-                className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-3.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-all duration-200 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none dark:from-blue-500 dark:to-blue-600"
+                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
               >
                 Submit
                 <span className="ml-0.5 font-mono text-[9px] opacity-70">Enter</span>
@@ -370,7 +370,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setCurrentStep(s => s + 1)}
-                className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-3.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-all duration-200 hover:shadow-md dark:from-blue-500 dark:to-blue-600"
+                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90"
               >
                 Next
                 <span className="ml-0.5 font-mono text-[9px] opacity-70">Enter</span>

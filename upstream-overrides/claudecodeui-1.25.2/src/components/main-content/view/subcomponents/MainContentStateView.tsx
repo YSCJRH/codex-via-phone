@@ -17,15 +17,21 @@ export default function MainContentStateView({
   const isNotFound = mode === 'not_found';
 
   return (
-    <div className="flex h-full flex-col">
+    <div className={`flex h-full flex-col ${isMobile ? 'mobile-shell' : ''}`}>
       {isMobile && (
-        <div className="pwa-header-safe flex-shrink-0 border-b border-border/50 bg-background/80 p-2 backdrop-blur-sm sm:p-3">
-          <MobileMenuButton onMenuClick={onMenuClick} compact />
+        <div className="mobile-safe-top mobile-surface flex-shrink-0 border-x-0 border-t-0 px-4 pb-3 pt-2">
+          <div className="flex items-center justify-between gap-3">
+            <MobileMenuButton onMenuClick={onMenuClick} compact />
+            <div className="text-sm font-medium text-foreground">
+              {isLoading ? 'Loading workspace' : isNotFound ? 'Session unavailable' : 'Projects'}
+            </div>
+            <div className="h-11 w-11" aria-hidden="true" />
+          </div>
         </div>
       )}
 
       {topWidget ? (
-        <div className="flex-shrink-0 border-b border-border/50 bg-background/80">
+        <div className="flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm">
           <div className="max-h-[42vh] overflow-y-auto p-3 sm:p-4">
             {topWidget}
           </div>
@@ -34,7 +40,7 @@ export default function MainContentStateView({
 
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <div className="text-center text-muted-foreground">
+          <div className={`text-center text-muted-foreground ${isMobile ? 'mobile-card mobile-shadow px-8 py-10' : ''}`}>
             <div className="mx-auto mb-4 h-10 w-10">
               <div
                 className="h-full w-full rounded-full border-[3px] border-muted border-t-primary"
@@ -51,7 +57,7 @@ export default function MainContentStateView({
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center">
-          <div className="mx-auto max-w-md px-6 text-center">
+          <div className={`mx-auto max-w-md px-6 text-center ${isMobile ? 'mobile-card mobile-shadow py-8' : ''}`}>
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
               <Folder className="h-7 w-7 text-muted-foreground" />
             </div>

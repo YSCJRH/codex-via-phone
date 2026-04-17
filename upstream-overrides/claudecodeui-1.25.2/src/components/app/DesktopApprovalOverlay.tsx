@@ -128,41 +128,41 @@ function ApprovalCard({
           : 'Approval still needs to be completed on the computer.';
 
   return (
-    <div className="rounded-2xl border border-amber-200 bg-white/95 p-4 shadow-sm">
+    <div className="mobile-card mobile-shadow p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-950">
+          <div className="text-sm font-semibold text-foreground">
             {request.title || 'Desktop approval required'}
           </div>
-          <div className="mt-1 text-xs text-slate-600">
+          <div className="mt-1 text-xs mobile-subtle-text">
             {availabilityMessage}
           </div>
         </div>
-        <div className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+        <div className="mobile-pill px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
           {bridgeSupported ? 'Bridge' : 'Desktop'}
         </div>
       </div>
 
       {(projectLabel || receivedAt || request.sessionId) && (
-        <div className="mt-3 grid gap-1 text-xs text-slate-600">
+        <div className="mt-3 grid gap-1 text-xs mobile-muted-text">
           {projectLabel && <div>Project: {projectLabel}</div>}
           {receivedAt && <div>Raised: {receivedAt}</div>}
           {request.sessionId && (
             <div className="break-all">
-              Session: <span className="font-mono text-[11px] text-slate-700">{request.sessionId}</span>
+              Session: <span className="font-mono text-[11px] text-foreground">{request.sessionId}</span>
             </div>
           )}
         </div>
       )}
 
       {request.message && (
-        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+        <div className="mt-3 rounded-2xl border border-border/50 bg-muted/35 px-3 py-2 text-xs leading-5 text-foreground">
           {request.message}
         </div>
       )}
 
       {commandText && (
-        <pre className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-950 px-3 py-2 text-[11px] leading-5 text-slate-50">
+        <pre className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-2xl border border-border/50 bg-slate-950 px-3 py-2 text-[11px] leading-5 text-slate-50 dark:bg-slate-900">
           {commandText}
         </pre>
       )}
@@ -192,7 +192,7 @@ function ApprovalCard({
               type="button"
               onClick={() => onResolve(request.requestId, 'approve')}
               disabled={isResolving || !canBridge}
-              className="inline-flex flex-1 items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex flex-1 items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isResolving ? 'Sending...' : 'Approve once'}
             </button>
@@ -200,7 +200,7 @@ function ApprovalCard({
               type="button"
               onClick={() => onResolve(request.requestId, 'deny')}
               disabled={isResolving || !canBridge}
-              className="inline-flex flex-1 items-center justify-center rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex flex-1 items-center justify-center rounded-xl border border-rose-300 bg-background px-3 py-2.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isResolving ? 'Sending...' : 'Deny'}
             </button>
@@ -210,7 +210,7 @@ function ApprovalCard({
           <button
             type="button"
             onClick={() => onOpenSession(request.requestId, request.sessionId as string)}
-            className="inline-flex flex-1 items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-800"
+            className="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-slate-800"
           >
             Open thread
           </button>
@@ -218,7 +218,7 @@ function ApprovalCard({
         <button
           type="button"
           onClick={() => onDismiss(request.requestId)}
-          className="inline-flex flex-1 items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+          className="inline-flex flex-1 items-center justify-center rounded-xl border border-border/60 px-3 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/50"
         >
           Dismiss for now
         </button>
@@ -243,19 +243,19 @@ export default function DesktopApprovalOverlay({
 
   const bridgeSummary = describeBridgeStatus(bridgeStatus);
   const bridgeSummaryClasses = bridgeSummary.level === 'success'
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-    : 'border-amber-200 bg-amber-50 text-amber-700';
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'
+    : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200';
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] bg-slate-950/45 sm:hidden" />
+      <div className="mobile-sheet-backdrop fixed inset-0 z-[80] sm:hidden" />
       <div className="fixed inset-x-0 bottom-0 z-[90] px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-4 sm:hidden">
-        <div className="mx-auto max-w-lg overflow-hidden rounded-t-3xl border border-amber-200 bg-amber-50 shadow-2xl">
-          <div className="border-b border-amber-200 bg-white/80 px-4 py-4">
-            <div className="text-sm font-semibold text-slate-950">
+        <div className="mobile-sheet-panel mx-auto max-w-lg overflow-hidden rounded-t-[30px]">
+          <div className="border-b border-border/40 bg-background/72 px-4 py-4">
+            <div className="text-sm font-semibold text-foreground">
               {requests.length === 1 ? '1 desktop approval is waiting' : `${requests.length} desktop approvals are waiting`}
             </div>
-            <div className="mt-1 text-xs text-slate-600">
+            <div className="mt-1 text-xs mobile-subtle-text">
               We mirrored the desktop prompt here so you do not miss it while away from the computer.
             </div>
             <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${bridgeSummaryClasses}`}>
@@ -278,11 +278,11 @@ export default function DesktopApprovalOverlay({
             ))}
           </div>
 
-          <div className="border-t border-amber-200 bg-white/90 px-4 py-3">
+          <div className="border-t border-border/40 bg-background/75 px-4 py-3">
             <button
               type="button"
               onClick={onDismissAll}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+              className="inline-flex w-full items-center justify-center rounded-xl border border-border/60 px-3 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/50"
             >
               Dismiss all for now
             </button>
@@ -291,10 +291,10 @@ export default function DesktopApprovalOverlay({
       </div>
 
       <div className="pointer-events-none fixed right-4 top-4 z-[90] hidden w-full max-w-sm sm:block">
-        <div className="pointer-events-auto overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 shadow-2xl">
-          <div className="border-b border-amber-200 bg-white/90 px-4 py-4">
-            <div className="text-sm font-semibold text-slate-950">Desktop approvals waiting</div>
-            <div className="mt-1 text-xs text-slate-600">
+        <div className="pointer-events-auto overflow-hidden rounded-2xl border border-border/50 bg-background/90 shadow-2xl backdrop-blur-xl">
+          <div className="border-b border-border/40 bg-background/90 px-4 py-4">
+            <div className="text-sm font-semibold text-foreground">Desktop approvals waiting</div>
+            <div className="mt-1 text-xs mobile-subtle-text">
               Mobile can now send approve-once or deny back into the same Codex session.
             </div>
             <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${bridgeSummaryClasses}`}>
@@ -317,11 +317,11 @@ export default function DesktopApprovalOverlay({
             ))}
           </div>
 
-          <div className="border-t border-amber-200 bg-white/90 px-4 py-3">
+          <div className="border-t border-border/40 bg-background/90 px-4 py-3">
             <button
               type="button"
               onClick={onDismissAll}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+              className="inline-flex w-full items-center justify-center rounded-xl border border-border/60 px-3 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/50"
             >
               Dismiss all for now
             </button>

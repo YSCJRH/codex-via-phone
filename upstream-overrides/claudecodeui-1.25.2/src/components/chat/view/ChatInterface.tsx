@@ -10,6 +10,8 @@ import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '../hooks/useChatComposerState';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
+import ChatInputControls from './subcomponents/ChatInputControls';
+import MobileBottomSheet from '../../app/MobileBottomSheet';
 
 
 type PendingViewSession = {
@@ -42,6 +44,9 @@ function ChatInterface({
   sendByCtrlEnter,
   externalMessageUpdate,
   onShowAllTasks,
+  isMobile = false,
+  mobileSheet = 'none',
+  onMobileSheetChange,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
   const { t } = useTranslation('chat');
@@ -222,7 +227,7 @@ function ChatInterface({
 
   // On WebSocket reconnect, re-fetch the current session's messages from JSONL so missed
   // streaming events (e.g. from long tool calls while iOS had the tab backgrounded) are shown.
-  // Also reset isLoading — if the server restarted or the session died mid-stream, the client
+  // Also reset isLoading - if the server restarted or the session died mid-stream, the client
   // would be stuck in "Processing..." forever without this reset.
   const reloadCurrentSessionMessages = useCallback(async (refreshStatusOrSessionId: boolean | string | null = false) => {
     if (!selectedProject || !selectedSession) return;
@@ -272,7 +277,7 @@ function ChatInterface({
       void reloadCurrentSessionMessages(true);
       reconnectCatchupTimerRef.current = null;
     }, 1500);
-    // Reset loading state — if the session is still active, new WebSocket messages will
+    // Reset loading state - if the session is still active, new WebSocket messages will
     // set it back to true. If it died, this clears the permanent frozen state.
     setIsLoading(false);
     setCanAbortSession(false);
@@ -436,7 +441,7 @@ function ChatInterface({
 
   return (
     <>
-      <div className="flex h-full flex-col">
+      <div className={`flex h-full flex-col ${isMobile ? 'mobile-shell' : ''}`}>
         <ChatMessagesPane
           scrollContainerRef={scrollContainerRef}
           onWheel={handleScroll}
@@ -484,7 +489,7 @@ function ChatInterface({
         />
 
         {showExternalSyncNotice && (
-          <div className="border-t border-border bg-emerald-50 px-4 py-3 text-sm dark:bg-emerald-950/30">
+          <div className="border-t border-border/50 bg-emerald-50/80 px-4 py-3 text-sm backdrop-blur-sm dark:bg-emerald-950/35">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <p className="font-medium text-foreground">
@@ -583,8 +588,51 @@ function ChatInterface({
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
           onTranscript={handleTranscript}
+          isMobile={isMobile}
+          onOpenComposerSettings={() => onMobileSheetChange?.('composer-settings')}
         />
       </div>
+
+      {isMobile && (
+        <MobileBottomSheet
+          open={mobileSheet === 'composer-settings'}
+          onClose={() => onMobileSheetChange?.('none')}
+          title="Session settings"
+          description="Move model, reasoning, permission, and context controls into a secondary sheet so the main composer stays clean."
+        >
+          <div className="space-y-4">
+            <div className="mobile-card p-4">
+              <div className="text-[13px] font-medium uppercase tracking-[0.12em] mobile-muted-text">
+                Current thread
+              </div>
+              <div className="mt-2 text-[16px] font-semibold text-foreground">
+                {selectedSession?.summary || selectedSession?.name || selectedProject?.displayName || selectedProject?.name || 'Chat'}
+              </div>
+              <div className="mt-1 text-[13px] mobile-muted-text">
+                {`Provider ${String(provider).toUpperCase()} / Session ${currentSessionId || selectedSession?.id || 'pending'}`}
+              </div>
+            </div>
+
+            <div className="mobile-card p-4">
+              <ChatInputControls
+                permissionMode={permissionMode}
+                onModeSwitch={cyclePermissionMode}
+                provider={provider}
+                thinkingMode={thinkingMode}
+                setThinkingMode={setThinkingMode}
+                tokenBudget={tokenBudget}
+                slashCommandsCount={slashCommandsCount}
+                onToggleCommandMenu={handleToggleCommandMenu}
+                hasInput={Boolean(input.trim())}
+                onClearInput={handleClearInput}
+                isUserScrolledUp={isUserScrolledUp}
+                hasMessages={chatMessages.length > 0}
+                onScrollToBottom={scrollToBottomAndReset}
+              />
+            </div>
+          </div>
+        </MobileBottomSheet>
+      )}
 
       {!IS_CODEX_ONLY_HARDENED && <QuickSettingsPanel />}
     </>

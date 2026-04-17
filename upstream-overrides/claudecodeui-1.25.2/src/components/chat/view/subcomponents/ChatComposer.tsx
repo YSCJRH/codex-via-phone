@@ -92,6 +92,8 @@ interface ChatComposerProps {
   isTextareaExpanded: boolean;
   sendByCtrlEnter?: boolean;
   onTranscript: (text: string) => void;
+  isMobile?: boolean;
+  onOpenComposerSettings?: () => void;
 }
 
 export default function ChatComposer({
@@ -150,9 +152,12 @@ export default function ChatComposer({
   isTextareaExpanded,
   sendByCtrlEnter,
   onTranscript,
+  isMobile = false,
+  onOpenComposerSettings,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   const isInputBlocked = Boolean(inputBlockedReason && inputBlockedReason.trim());
+  const shouldUseMobileComposer = Boolean(isMobile);
   const textareaRect = textareaRef.current?.getBoundingClientRect();
   const commandMenuPosition = {
     top: textareaRect ? Math.max(16, textareaRect.top - 316) : 0,
@@ -167,7 +172,7 @@ export default function ChatComposer({
 
   // On mobile, when input is focused, float the input box at the bottom
   const mobileFloatingClass = isInputFocused
-    ? 'max-sm:fixed max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:z-50 max-sm:bg-background max-sm:shadow-[0_-4px_20px_rgba(0,0,0,0.15)]'
+    ? 'max-sm:fixed max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:z-[65] max-sm:bg-background/96 max-sm:backdrop-blur-xl'
     : '';
 
   return (
@@ -196,21 +201,66 @@ export default function ChatComposer({
           </div>
         )}
 
-        {!hasQuestionPanel && <ChatInputControls
-          permissionMode={permissionMode}
-          onModeSwitch={onModeSwitch}
-          provider={provider}
-          thinkingMode={thinkingMode}
-          setThinkingMode={setThinkingMode}
-          tokenBudget={tokenBudget}
-          slashCommandsCount={slashCommandsCount}
-          onToggleCommandMenu={onToggleCommandMenu}
-          hasInput={hasInput}
-          onClearInput={onClearInput}
-          isUserScrolledUp={isUserScrolledUp}
-          hasMessages={hasMessages}
-          onScrollToBottom={onScrollToBottom}
-        />}
+        {!hasQuestionPanel && !shouldUseMobileComposer && (
+          <ChatInputControls
+            permissionMode={permissionMode}
+            onModeSwitch={onModeSwitch}
+            provider={provider}
+            thinkingMode={thinkingMode}
+            setThinkingMode={setThinkingMode}
+            tokenBudget={tokenBudget}
+            slashCommandsCount={slashCommandsCount}
+            onToggleCommandMenu={onToggleCommandMenu}
+            hasInput={hasInput}
+            onClearInput={onClearInput}
+            isUserScrolledUp={isUserScrolledUp}
+            hasMessages={hasMessages}
+            onScrollToBottom={onScrollToBottom}
+          />
+        )}
+
+        {!hasQuestionPanel && shouldUseMobileComposer && (
+          <div className="mobile-card mobile-shadow flex items-center justify-between gap-2 px-3 py-2.5">
+            <button
+              type="button"
+              onClick={onOpenComposerSettings}
+              className="mobile-pill inline-flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-foreground"
+            >
+              <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m4-4H8" />
+              </svg>
+              Session settings
+            </button>
+
+            <div className="flex items-center gap-2">
+              {!IS_CODEX_ONLY_HARDENED && (
+                <button
+                  type="button"
+                  onClick={onToggleCommandMenu}
+                  className="mobile-pill relative inline-flex h-10 min-w-[3rem] items-center justify-center px-3 text-foreground"
+                  aria-label={t('input.showAllCommands')}
+                >
+                  <span className="text-[17px] font-semibold leading-none">/</span>
+                  {slashCommandsCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                      {slashCommandsCount}
+                    </span>
+                  ) : null}
+                </button>
+              )}
+
+              {isUserScrolledUp && hasMessages ? (
+                <button
+                  type="button"
+                  onClick={onScrollToBottom}
+                  className="mobile-pill inline-flex h-10 items-center justify-center px-3 text-[13px] font-medium text-primary"
+                >
+                  Latest
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
       </div>
 
       {!hasQuestionPanel && <form onSubmit={onSubmit as (event: FormEvent<HTMLFormElement>) => void} className="relative mx-auto max-w-4xl">
@@ -283,86 +333,155 @@ export default function ChatComposer({
           frequentCommands={frequentCommands}
         />
 
-        <div
-          {...getRootProps()}
-          className={`relative overflow-hidden rounded-2xl border border-border/50 bg-card/80 shadow-sm backdrop-blur-sm transition-all duration-200 focus-within:border-primary/30 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/15 ${
-            isTextareaExpanded ? 'chat-input-expanded' : ''
-          }`}
-        >
-          <input {...getInputProps()} />
-          <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-            <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words py-1.5 pl-12 pr-20 text-base leading-6 text-transparent sm:py-4 sm:pr-40">
-              {renderInputWithMentions(input)}
-            </div>
-          </div>
-
-          <div className="relative z-10">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              disabled={isInputBlocked}
-              onChange={onInputChange}
-              onClick={onTextareaClick}
-              onKeyDown={onTextareaKeyDown}
-              onPaste={onTextareaPaste}
-              onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
-              onFocus={() => onInputFocusChange?.(true)}
-              onBlur={() => onInputFocusChange?.(false)}
-              onInput={onTextareaInput}
-              placeholder={isInputBlocked ? (inputBlockedReason || placeholder) : placeholder}
-              className="chat-input-placeholder block max-h-[40vh] min-h-[50px] w-full resize-none overflow-y-auto rounded-2xl bg-transparent py-1.5 pl-12 pr-20 text-base leading-6 text-foreground placeholder-muted-foreground/50 transition-all duration-200 focus:outline-none sm:max-h-[300px] sm:min-h-[80px] sm:py-4 sm:pr-40"
-              style={{ height: '50px' }}
-            />
-
+        {shouldUseMobileComposer ? (
+          <div className="flex items-end gap-2 mobile-safe-bottom pb-0">
             {!IS_CODEX_ONLY_HARDENED && (
               <button
                 type="button"
                 onClick={openImagePicker}
-                className="absolute left-2 top-1/2 -translate-y-1/2 transform rounded-xl p-2 transition-colors hover:bg-accent/60"
+                className="mobile-circle-button text-foreground"
                 title={t('input.attachImages')}
               >
-                <svg className="h-5 w-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 5v14m7-7H5" />
                 </svg>
               </button>
             )}
 
-            <div className="absolute right-16 top-1/2 -translate-y-1/2 transform sm:right-16" style={{ display: 'none' }}>
-              <MicButton onTranscript={onTranscript} className="h-10 w-10 sm:h-10 sm:w-10" />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading || isInputBlocked}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                onSubmit(event);
-              }}
-              onTouchStart={(event) => {
-                event.preventDefault();
-                onSubmit(event);
-              }}
-              className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 transform items-center justify-center rounded-xl bg-primary transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground sm:h-11 sm:w-11"
-            >
-              <svg className="h-4 w-4 rotate-90 transform text-primary-foreground sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-
             <div
-              className={`pointer-events-none absolute bottom-1 left-12 right-14 hidden text-xs text-muted-foreground/50 transition-opacity duration-200 sm:right-40 sm:block ${
-                input.trim() ? 'opacity-0' : 'opacity-100'
+              {...getRootProps()}
+              className={`mobile-card mobile-shadow mobile-chat-input-frame relative flex-1 overflow-hidden border border-border/60 bg-card/92 backdrop-blur-sm transition-all duration-200 focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/15 ${
+                isTextareaExpanded ? 'chat-input-expanded' : ''
               }`}
             >
-              {sendByCtrlEnter ? t('input.hintText.ctrlEnter') : t('input.hintText.enter')}
+              <input {...getInputProps()} />
+
+              <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-[26px]">
+                <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-3 pr-14 text-base leading-7 text-transparent">
+                  {renderInputWithMentions(input)}
+                </div>
+              </div>
+
+              <textarea
+                ref={textareaRef}
+                value={input}
+                disabled={isInputBlocked}
+                onChange={onInputChange}
+                onClick={onTextareaClick}
+                onKeyDown={onTextareaKeyDown}
+                onPaste={onTextareaPaste}
+                onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
+                onFocus={() => onInputFocusChange?.(true)}
+                onBlur={() => onInputFocusChange?.(false)}
+                onInput={onTextareaInput}
+                placeholder={isInputBlocked ? (inputBlockedReason || placeholder) : placeholder}
+                className="chat-input-placeholder block max-h-[34vh] min-h-[52px] w-full resize-none overflow-y-auto rounded-[26px] bg-transparent px-4 py-3 pr-14 text-base leading-7 text-foreground placeholder-muted-foreground/45 focus:outline-none"
+                style={{ height: '52px' }}
+              />
+
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading || isInputBlocked}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    onSubmit(event);
+                  }}
+                  onTouchStart={(event) => {
+                    event.preventDefault();
+                    onSubmit(event);
+                  }}
+                  className="mobile-circle-button mobile-circle-button--primary h-10 w-10 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <svg className="h-4 w-4 rotate-90 transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div
+            {...getRootProps()}
+            className={`relative overflow-hidden rounded-2xl border border-border/50 bg-card/80 shadow-sm backdrop-blur-sm transition-all duration-200 focus-within:border-primary/30 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/15 ${
+              isTextareaExpanded ? 'chat-input-expanded' : ''
+            }`}
+          >
+            <input {...getInputProps()} />
+            <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+              <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words py-1.5 pl-12 pr-20 text-base leading-6 text-transparent sm:py-4 sm:pr-40">
+                {renderInputWithMentions(input)}
+              </div>
+            </div>
+
+            <div className="relative z-10">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                disabled={isInputBlocked}
+                onChange={onInputChange}
+                onClick={onTextareaClick}
+                onKeyDown={onTextareaKeyDown}
+                onPaste={onTextareaPaste}
+                onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
+                onFocus={() => onInputFocusChange?.(true)}
+                onBlur={() => onInputFocusChange?.(false)}
+                onInput={onTextareaInput}
+                placeholder={isInputBlocked ? (inputBlockedReason || placeholder) : placeholder}
+                className="chat-input-placeholder block max-h-[40vh] min-h-[50px] w-full resize-none overflow-y-auto rounded-2xl bg-transparent py-1.5 pl-12 pr-20 text-base leading-6 text-foreground placeholder-muted-foreground/50 transition-all duration-200 focus:outline-none sm:max-h-[300px] sm:min-h-[80px] sm:py-4 sm:pr-40"
+                style={{ height: '50px' }}
+              />
+
+              {!IS_CODEX_ONLY_HARDENED && (
+                <button
+                  type="button"
+                  onClick={openImagePicker}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 transform rounded-xl p-2 transition-colors hover:bg-accent/60"
+                  title={t('input.attachImages')}
+                >
+                  <svg className="h-5 w-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </button>
+              )}
+
+              <div className="absolute right-16 top-1/2 -translate-y-1/2 transform sm:right-16" style={{ display: 'none' }}>
+                <MicButton onTranscript={onTranscript} className="h-10 w-10 sm:h-10 sm:w-10" />
+              </div>
+
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading || isInputBlocked}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onSubmit(event);
+                }}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  onSubmit(event);
+                }}
+                className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 transform items-center justify-center rounded-xl bg-primary transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground sm:h-11 sm:w-11"
+              >
+                <svg className="h-4 w-4 rotate-90 transform text-primary-foreground sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+
+              <div
+                className={`pointer-events-none absolute bottom-1 left-12 right-14 hidden text-xs text-muted-foreground/50 transition-opacity duration-200 sm:right-40 sm:block ${
+                  input.trim() ? 'opacity-0' : 'opacity-100'
+                }`}
+              >
+                {sendByCtrlEnter ? t('input.hintText.ctrlEnter') : t('input.hintText.enter')}
+              </div>
+            </div>
+          </div>
+        )}
       </form>}
     </div>
   );

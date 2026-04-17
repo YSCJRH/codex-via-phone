@@ -125,4 +125,7 @@ export interface ChatInterfaceProps {
   externalMessageUpdate?: number;
   onTaskClick?: (...args: unknown[]) => void;
   onShowAllTasks?: (() => void) | null;
+  isMobile?: boolean;
+  mobileSheet?: 'none' | 'more' | 'search' | 'composer-settings';
+  onMobileSheetChange?: (sheet: 'none' | 'more' | 'search' | 'composer-settings') => void;
 }

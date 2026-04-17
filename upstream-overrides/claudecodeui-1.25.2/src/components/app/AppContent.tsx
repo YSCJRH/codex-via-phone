@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import Sidebar from '../sidebar/view/Sidebar';
 import MainContent from '../main-content/view/MainContent';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -10,8 +9,37 @@ import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
 import { api } from '../../utils/api';
 import type { PendingPermissionRequest } from '../chat/types/types';
+import type { AppTab, Project, ProjectSession } from '../../types/app';
 import MobileNav from './MobileNav';
 import DesktopApprovalOverlay, { type DesktopApprovalBridgeStatus } from './DesktopApprovalOverlay';
+import MobileHomeScreen from './MobileHomeScreen';
+import MobileMoreSheet from './MobileMoreSheet';
+import MobileSearchSheet from './MobileSearchSheet';
+
+type MobileSheetState = 'none' | 'more' | 'search' | 'composer-settings';
+
+const LAST_MOBILE_SESSION_STORAGE_KEY = 'mobile-codex:last-session-id';
+
+function readLastMobileSessionId() {
+  try {
+    return localStorage.getItem(LAST_MOBILE_SESSION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeLastMobileSessionId(sessionId: string | null) {
+  try {
+    if (!sessionId) {
+      localStorage.removeItem(LAST_MOBILE_SESSION_STORAGE_KEY);
+      return;
+    }
+
+    localStorage.setItem(LAST_MOBILE_SESSION_STORAGE_KEY, sessionId);
+  } catch {
+    // Ignore storage failures so the mobile UI remains functional.
+  }
+}
 
 function normalizeDesktopApprovalRequest(value: unknown): PendingPermissionRequest | null {
   if (!value || typeof value !== 'object') {
@@ -63,10 +91,11 @@ type DesktopApprovalActionState = {
 export default function AppContent() {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId?: string }>();
-  const { t } = useTranslation('common');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
   const { ws, sendMessage, latestMessage, isConnected } = useWebSocket();
   const wasConnectedRef = useRef(false);
+  const [mobileSheet, setMobileSheet] = useState<MobileSheetState>('none');
+  const [lastMobileSessionId, setLastMobileSessionId] = useState<string | null>(() => readLastMobileSessionId());
   const [desktopApprovals, setDesktopApprovals] = useState<PendingPermissionRequest[]>([]);
   const [dismissedDesktopApprovalIds, setDismissedDesktopApprovalIds] = useState<string[]>([]);
   const [desktopApprovalActionState, setDesktopApprovalActionState] = useState<Record<string, DesktopApprovalActionState>>({});
@@ -90,12 +119,10 @@ export default function AppContent() {
     routeResolutionState,
     unresolvedSessionId,
     activeTab,
-    sidebarOpen,
     isLoadingProjects,
     isInputFocused,
     externalMessageUpdate,
     setActiveTab,
-    setSidebarOpen,
     setIsInputFocused,
     setShowSettings,
     openSettings,
@@ -111,6 +138,26 @@ export default function AppContent() {
     terminalSessions,
   });
   const effectiveCurrentSessionId = selectedSession?.id || sessionId || null;
+  const mobileProjects = sidebarSharedProps.projects || [];
+
+  useEffect(() => {
+    if (!isMobile || !selectedSession?.id) {
+      return;
+    }
+
+    setLastMobileSessionId(selectedSession.id);
+    writeLastMobileSessionId(selectedSession.id);
+  }, [isMobile, selectedSession?.id]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      return;
+    }
+
+    if (sessionId || activeTab !== 'chat') {
+      setMobileSheet('none');
+    }
+  }, [activeTab, isMobile, sessionId]);
 
   useEffect(() => {
     // Expose a non-blocking refresh for chat/session flows.
@@ -335,76 +382,188 @@ export default function AppContent() {
     }
   }, [desktopApprovals, effectiveCurrentSessionId, sendMessage, visibleDesktopApprovals]);
 
+  const resolveMobileFallbackSessionId = useMemo(() => {
+    if (lastMobileSessionId) {
+      return lastMobileSessionId;
+    }
+
+    for (const project of mobileProjects) {
+      const allSessions = [
+        ...(project.codexSessions || []),
+        ...(project.sessions || []),
+        ...(project.cursorSessions || []),
+        ...(project.geminiSessions || []),
+      ];
+      if (allSessions[0]?.id) {
+        return allSessions[0].id;
+      }
+    }
+
+    return null;
+  }, [lastMobileSessionId, mobileProjects]);
+
+  const handleMobileHomeProjectSelect = useCallback((project: Project) => {
+    setActiveTab('chat');
+    setMobileSheet('none');
+    sidebarSharedProps.onProjectSelect(project);
+  }, [setActiveTab, sidebarSharedProps]);
+
+  const handleMobileHomeSessionSelect = useCallback((session: ProjectSession) => {
+    setActiveTab('chat');
+    setMobileSheet('none');
+    sidebarSharedProps.onSessionSelect(session);
+  }, [setActiveTab, sidebarSharedProps]);
+
+  const handleMobileNewSession = useCallback((project: Project) => {
+    setActiveTab('chat');
+    setMobileSheet('none');
+    sidebarSharedProps.onNewSession(project);
+  }, [setActiveTab, sidebarSharedProps]);
+
+  const handleOpenMobileSearch = useCallback(() => {
+    setMobileSheet('search');
+  }, []);
+
+  const handleOpenMobileMore = useCallback(() => {
+    setMobileSheet((previous) => (previous === 'more' ? 'none' : 'more'));
+  }, []);
+
+  const handleCloseMobileSheet = useCallback(() => {
+    setMobileSheet('none');
+  }, []);
+
+  const handleOpenTasks = useCallback(() => {
+    setActiveTab('tasks');
+    setMobileSheet('none');
+    navigate('/');
+  }, [navigate, setActiveTab]);
+
+  const handleMobileProjectsClick = useCallback(() => {
+    setActiveTab('chat');
+    setMobileSheet('none');
+    navigate('/');
+  }, [navigate, setActiveTab]);
+
+  const handleMobileChatClick = useCallback(() => {
+    setActiveTab('chat');
+    setMobileSheet('none');
+
+    const targetSessionId = selectedSession?.id || effectiveCurrentSessionId || resolveMobileFallbackSessionId;
+    if (targetSessionId) {
+      navigate(`/session/${targetSessionId}`);
+      return;
+    }
+
+    navigate('/');
+  }, [effectiveCurrentSessionId, navigate, resolveMobileFallbackSessionId, selectedSession?.id, setActiveTab]);
+
+  const handleMobileMoreSelect = useCallback((nextTab: AppTab) => {
+    setActiveTab(nextTab);
+    setMobileSheet('none');
+    navigate('/');
+  }, [navigate, setActiveTab]);
+
+  const mobileNavActiveItem = useMemo<'projects' | 'chat' | 'more'>(() => {
+    if (sessionId) {
+      return 'chat';
+    }
+
+    if (mobileSheet === 'more' || activeTab !== 'chat') {
+      return 'more';
+    }
+
+    return 'projects';
+  }, [activeTab, mobileSheet, sessionId]);
+
+  const shouldShowMobileHome = Boolean(isMobile && !sessionId && activeTab === 'chat' && !isLoadingProjects);
+
   return (
-    <div className="fixed inset-0 flex bg-background">
+    <div className={`fixed inset-0 flex ${isMobile ? 'mobile-shell bg-background' : 'bg-background'}`}>
       {!isMobile ? (
         <div className="h-full flex-shrink-0 border-r border-border/50">
           <Sidebar {...sidebarSharedProps} />
         </div>
-      ) : (
-        <div
-          className={`fixed inset-0 z-50 flex transition-all duration-150 ease-out ${sidebarOpen ? 'visible opacity-100' : 'invisible opacity-0'
-            }`}
-        >
-          <button
-            className="fixed inset-0 bg-background/60 backdrop-blur-sm transition-opacity duration-150 ease-out"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSidebarOpen(false);
-            }}
-            onTouchStart={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setSidebarOpen(false);
-            }}
-            aria-label={t('versionUpdate.ariaLabels.closeSidebar')}
-          />
-          <div
-            className={`relative h-full w-[85vw] max-w-sm transform border-r border-border/40 bg-card transition-transform duration-150 ease-out sm:w-80 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-              }`}
-            onClick={(event) => event.stopPropagation()}
-            onTouchStart={(event) => event.stopPropagation()}
-          >
-            <Sidebar {...sidebarSharedProps} />
-          </div>
-        </div>
-      )}
+      ) : null}
 
       <div className={`flex min-w-0 flex-1 flex-col ${isMobile && !IS_CODEX_ONLY_HARDENED ? 'pb-mobile-nav' : ''}`}>
-        <MainContent
-          selectedProject={selectedProject}
-          selectedSession={selectedSession}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          ws={ws}
-          sendMessage={sendMessage}
-          latestMessage={latestMessage}
-          isMobile={isMobile}
-          onMenuClick={() => setSidebarOpen(true)}
-          isLoading={isLoadingProjects}
-          routeResolutionState={routeResolutionState}
-          unresolvedSessionId={unresolvedSessionId}
-          onInputFocusChange={setIsInputFocused}
-          onSessionActive={markSessionAsActive}
-          onSessionInactive={markSessionAsInactive}
-          onSessionProcessing={markSessionAsProcessing}
-          onSessionNotProcessing={markSessionAsNotProcessing}
-          onSessionTerminal={markSessionAsTerminal}
-          processingSessions={processingSessions}
-          terminalSessions={terminalSessions}
-          onReplaceTemporarySession={replaceTemporarySession}
-          onNavigateToSession={(targetSessionId: string) => navigate(`/session/${targetSessionId}`)}
-          onShowSettings={() => setShowSettings(true)}
-          externalMessageUpdate={externalMessageUpdate}
-        />
+        {shouldShowMobileHome ? (
+          <MobileHomeScreen
+            projects={mobileProjects}
+            selectedProject={selectedProject}
+            selectedSession={selectedSession}
+            onProjectSelect={handleMobileHomeProjectSelect}
+            onSessionSelect={handleMobileHomeSessionSelect}
+            onNewSession={handleMobileNewSession}
+            onShowSettings={() => setShowSettings(true)}
+            onOpenSearch={handleOpenMobileSearch}
+            onOpenMore={handleOpenMobileMore}
+            onOpenTasks={handleOpenTasks}
+            desktopApprovalBridgeStatus={desktopApprovalBridgeStatus}
+            desktopApprovalCount={visibleDesktopApprovals.length}
+            isConnected={isConnected}
+          />
+        ) : (
+          <MainContent
+            selectedProject={selectedProject}
+            selectedSession={selectedSession}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            ws={ws}
+            sendMessage={sendMessage}
+            latestMessage={latestMessage}
+            isMobile={isMobile}
+            onMenuClick={handleMobileProjectsClick}
+            isLoading={isLoadingProjects}
+            routeResolutionState={routeResolutionState}
+            unresolvedSessionId={unresolvedSessionId}
+            onInputFocusChange={setIsInputFocused}
+            onSessionActive={markSessionAsActive}
+            onSessionInactive={markSessionAsInactive}
+            onSessionProcessing={markSessionAsProcessing}
+            onSessionNotProcessing={markSessionAsNotProcessing}
+            onSessionTerminal={markSessionAsTerminal}
+            processingSessions={processingSessions}
+            terminalSessions={terminalSessions}
+            onReplaceTemporarySession={replaceTemporarySession}
+            onNavigateToSession={(targetSessionId: string) => navigate(`/session/${targetSessionId}`)}
+            onShowSettings={() => setShowSettings(true)}
+            externalMessageUpdate={externalMessageUpdate}
+            mobileSheet={mobileSheet}
+            onMobileSheetChange={setMobileSheet}
+          />
+        )}
       </div>
 
       {isMobile && !IS_CODEX_ONLY_HARDENED && (
         <MobileNav
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          activeItem={mobileNavActiveItem}
+          onProjectsClick={handleMobileProjectsClick}
+          onChatClick={handleMobileChatClick}
+          onMoreClick={handleOpenMobileMore}
           isInputFocused={isInputFocused}
         />
+      )}
+
+      {isMobile && !IS_CODEX_ONLY_HARDENED && (
+        <>
+          <MobileSearchSheet
+            open={mobileSheet === 'search'}
+            projects={mobileProjects}
+            onClose={handleCloseMobileSheet}
+            onProjectSelect={handleMobileHomeProjectSelect}
+            onSessionSelect={handleMobileHomeSessionSelect}
+          />
+
+          <MobileMoreSheet
+            open={mobileSheet === 'more'}
+            activeTab={activeTab}
+            selectedProject={selectedProject}
+            onClose={handleCloseMobileSheet}
+            onSelectTab={handleMobileMoreSelect}
+            onShowSettings={() => setShowSettings(true)}
+            onGoHome={handleMobileProjectsClick}
+          />
+        </>
       )}
 
       <DesktopApprovalOverlay
