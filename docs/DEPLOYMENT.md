@@ -211,6 +211,8 @@ Use these scripts when you want read-only inspection instead of a boundary chang
 - `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-support-bundle.ps1 -EmitJson`
 - `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-audit.ps1 -EmitJson`
 
+The redacted status output also reports how many approved devices have already registered device keys, and how many legacy approvals still need migration.
+
 ## Optional Environment Variables
 
 - `MOBILE_CODEX_UPSTREAM_DIR`

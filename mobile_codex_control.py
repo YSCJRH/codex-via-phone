@@ -1631,6 +1631,17 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
         show_sensitive=show_sensitive,
         include_internal=include_internal,
     )
+    approved_devices_with_keys = sum(1 for item in approved_devices if item.get("has_device_key"))
+    approved_devices_without_keys = max(0, len(approved_devices) - approved_devices_with_keys)
+    pending_new_device_approvals = sum(
+        1 for item in pending_approvals if str(item.get("approval_kind") or "new-device") == "new-device"
+    )
+    pending_legacy_key_upgrades = sum(
+        1 for item in pending_approvals if str(item.get("approval_kind") or "") == "legacy-upgrade"
+    )
+    pending_device_key_rotations = sum(
+        1 for item in pending_approvals if str(item.get("approval_kind") or "") == "device-key-rotation"
+    )
     desktop_bridge = load_desktop_approval_bridge_status()
     runtime_diagnostics = load_runtime_diagnostics()
     auto_start = load_auto_start_metadata()
@@ -1708,6 +1719,23 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
         }:
             auto_start_level = "warning"
     auto_start_detail = " | ".join(auto_start_detail_parts)
+    device_trust_level = "success"
+    if approved_devices_without_keys > 0 or pending_legacy_key_upgrades > 0 or pending_device_key_rotations > 0:
+        device_trust_level = "warning"
+    device_trust_headline = (
+        "all approved devices use keys"
+        if approved_devices and approved_devices_without_keys == 0
+        else "legacy device migration pending"
+        if approved_devices_without_keys > 0
+        else "waiting for first approved device"
+    )
+    device_trust_detail = " | ".join(
+        [
+            f"approved with keys {approved_devices_with_keys}/{len(approved_devices)}",
+            f"legacy upgrade approvals {pending_legacy_key_upgrades}",
+            f"key rotation approvals {pending_device_key_rotations}",
+        ]
+    )
 
     blocks = [
         StatusBlock("PC 应用服务", app_ok, "运行中" if app_ok else "未启动", app_detail, "success" if app_ok else "error"),
@@ -1732,6 +1760,13 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
             str(desktop_bridge["headline"]),
             str(desktop_bridge["detail"]),
             str(desktop_bridge["level"]),
+        ),
+        StatusBlock(
+            "Device trust",
+            approved_devices_without_keys == 0,
+            device_trust_headline,
+            device_trust_detail,
+            device_trust_level,
         ),
         StatusBlock(
             "手机连接状态",
@@ -1780,7 +1815,15 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
             "mode_name": normalize_mode_name(remote.get("visibility") or app_bind_mode),
             "mode_requires_tailscale_client": bool(remote.get("requires_tailscale_client")),
             "approved_devices": len(approved_devices),
+            "approved_devices_with_keys": approved_devices_with_keys,
+            "approved_devices_without_keys": approved_devices_without_keys,
             "pending_approvals": len(pending_approvals),
+            "pending_new_device_approvals": pending_new_device_approvals,
+            "pending_legacy_key_upgrades": pending_legacy_key_upgrades,
+            "pending_device_key_rotations": pending_device_key_rotations,
+            "device_trust_level": device_trust_level,
+            "device_trust_headline": device_trust_headline,
+            "device_trust_detail": device_trust_detail,
             "desktop_bridge_active": bool(desktop_bridge["active"]),
             "desktop_bridge_detail": str(desktop_bridge["detail"]),
             "autostart_installed": auto_start_installed,
@@ -2542,6 +2585,112 @@ class ControlApp:
                 f"  设备 ID：{item.get('device_id') or '暂无'}\n"
                 f"  平台：{item.get('platform') or '暂无'}\n"
                 f"  类型：{item.get('app_type') or '暂无'}\n"
+                f"  首次批准：{format_datetime(item.get('first_approved_at'))}\n"
+                f"  最近登录：{format_datetime(item.get('last_login'))}\n"
+                f"  最近来源 IP：{item.get('last_ip') or '暂无'}\n"
+            )
+        self._render_text(self.whitelist_text, "\n".join(whitelist_lines) if whitelist_lines else "当前设备白名单为空。")
+
+        request_lines = []
+        for item in status["recent_mobile_requests"]:
+            request_lines.append(
+                f"{format_datetime(item['time'])}（{format_age_text(item['time'])}）\n"
+                f"  请求：{item['method']} {item['path']}\n"
+                f"  状态码：{item['status']}  来源 IP：{item['ip']}\n"
+                f"  UA：{item['user_agent']}\n"
+            )
+        self._render_text(self.requests_text, "\n".join(request_lines) if request_lines else "最近没有检测到手机访问。")
+        self._render_text(self.diagnostics_text, "\n".join(status["diagnostics"]) if status["diagnostics"] else "最近没有诊断告警。")
+        self._render_pending_approval_list(status["pending_device_approvals"])
+
+    def apply_status(self, status: dict[str, Any]) -> None:
+        summary = status["summary"]
+        self.last_refresh_text.set(f"最近刷新：{status['checked_at']}")
+        self.local_url_text.set(f"本地面板：{status['local_url']}")
+        self.remote_url_text.set(f"模式入口：{status['mode_url'] or 'localhost'}")
+        self.sensitive_warning_text.set(
+            "敏感信息显示已开启，请勿截图或导出。"
+            if self.show_sensitive.get()
+            else ""
+        )
+
+        metric_values = {
+            "services": (
+                f"{summary['healthy_local_services']}/{summary['total_local_services']} 正常",
+                f"3001: {summary['listener_summary'][str(APP_PORT)]} | 8080: {summary['listener_summary'][str(PROXY_PORT)]}",
+                "success" if summary["healthy_local_services"] == summary["total_local_services"] else "error",
+            ),
+            "autostart": (
+                summary["autostart_value"],
+                summary["autostart_detail"],
+                summary["autostart_level"],
+            ),
+            "mode": (
+                summary["mode_value"],
+                summary["mode_detail"],
+                summary["mode_level"],
+            ),
+            "mobile": (
+                f"{summary['mobile_online']}/{summary['mobile_total']}",
+                "至少有一台手机在线" if summary["mobile_online"] > 0 else "当前没有手机在线",
+                "success" if summary["mobile_online"] > 0 else "error",
+            ),
+            "whitelist": (
+                f"{summary['approved_devices']} 台",
+                f"keys {summary['approved_devices_with_keys']} | legacy {summary['approved_devices_without_keys']}",
+                "success" if summary["approved_devices_without_keys"] == 0 and summary["approved_devices"] > 0 else "warning",
+            ),
+            "approvals": (
+                f"{summary['pending_approvals']} 条",
+                f"new {summary['pending_new_device_approvals']} | legacy {summary['pending_legacy_key_upgrades']} | rotate {summary['pending_device_key_rotations']}",
+                "warning" if summary["pending_approvals"] > 0 else "success",
+            ),
+            "activity": (
+                f"{summary['recent_phone_requests']} 条",
+                f"WebSocket {summary['recent_phone_websockets']} | {'最近有活跃访问' if summary['recent_phone_activity'] else '最近无活跃访问'}",
+                "success" if summary["recent_phone_activity"] else "error",
+            ),
+        }
+        for key, (value, detail, level) in metric_values.items():
+            widgets = self.metric_widgets[key]
+            background, color, _ = self._level_theme(level)
+            widgets["frame"].configure(bg=background)
+            widgets["value"].configure(text=value, fg=color, bg=background)
+            for child in widgets["frame"].winfo_children():
+                child.configure(bg=background)
+            widgets["detail"].configure(text=detail, bg=background)
+
+        for labels, block in zip(self.block_labels, status["blocks"], strict=False):
+            frame_color, text_color, _ = self._level_theme(block.get("level", "error"))
+            labels["frame"].configure(bg=frame_color)
+            labels["title"].configure(text=block["label"], bg=frame_color)
+            labels["state"].configure(text=block["headline"], fg=text_color, bg=frame_color)
+            labels["detail"].configure(text=block["detail"], bg=frame_color)
+
+        devices_lines = []
+        for peer in status["mobile_peers"]:
+            devices_lines.append(
+                f"{peer['display_name']}\n"
+                f"  系统：{peer['os']}\n"
+                f"  在线：{'是' if peer['online'] else '否'}\n"
+                f"  活跃：{'是' if peer['active'] else '否'}\n"
+                f"  Tail IP：{peer['tail_ip'] or '暂无'}\n"
+                f"  最近握手：{format_datetime(peer['last_handshake'])}\n"
+                f"  最近出现：{format_datetime(peer['last_seen'])}\n"
+                f"  中继区域：{peer['relay'] or '暂无'}\n"
+            )
+        self._render_text(self.devices_text, "\n".join(devices_lines) if devices_lines else "暂未检测到手机设备。")
+
+        whitelist_lines = []
+        for item in status["approved_devices"]:
+            whitelist_lines.append(
+                f"{item['display_name']}\n"
+                f"  账号：{item.get('username') or '未知'}\n"
+                f"  设备 ID：{item.get('device_id') or '暂无'}\n"
+                f"  平台：{item.get('platform') or '暂无'}\n"
+                f"  类型：{item.get('app_type') or '暂无'}\n"
+                f"  设备密钥：{'已登记' if item.get('has_device_key') else '未登记'}\n"
+                f"  密钥登记时间：{format_datetime(item.get('key_registered_at'))}\n"
                 f"  首次批准：{format_datetime(item.get('first_approved_at'))}\n"
                 f"  最近登录：{format_datetime(item.get('last_login'))}\n"
                 f"  最近来源 IP：{item.get('last_ip') or '暂无'}\n"

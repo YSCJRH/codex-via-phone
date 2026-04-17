@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 ## Read-Only Ops Scripts
 
 - `scripts/status-mobile-codex.ps1`
-  Read-only redacted status output
+  Read-only redacted status output, including device-key migration counts
 - `scripts/doctor-mobile-codex.ps1`
   Read-only environment and boundary checks
 - `scripts/export-mobile-codex-support-bundle.ps1`

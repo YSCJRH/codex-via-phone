@@ -210,6 +210,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 - `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-support-bundle.ps1 -EmitJson`
 - `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-audit.ps1 -EmitJson`
 
+脱敏后的状态输出还会报告：已经登记设备密钥的已批准设备数量，以及仍需迁移的 legacy approval 数量。
+
 ## 可选环境变量
 
 - `MOBILE_CODEX_UPSTREAM_DIR`

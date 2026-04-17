@@ -40,6 +40,8 @@ Read-only operational inspection should go through:
 - `scripts/doctor-mobile-codex.ps1`
 - `scripts/export-mobile-codex-support-bundle.ps1`
 
+The redacted status surface is also where you should monitor the device-key migration state: approved devices with keys, approved devices still waiting for key registration, and pending legacy upgrade approvals.
+
 ## Runtime Shape
 
 ```text

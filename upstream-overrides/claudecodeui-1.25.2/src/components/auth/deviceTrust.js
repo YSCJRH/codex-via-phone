@@ -1,6 +1,6 @@
-const DEVICE_SESSION_STORAGE_KEY = 'codex-device-session-v1';
 const DEVICE_ID_STORAGE_KEY = 'codex-device-id-v1';
 const DEVICE_KEY_META_STORAGE_KEY = 'codex-device-key-meta-v1';
+const LEGACY_DEVICE_SESSION_STORAGE_KEY = 'codex-device-session-v1';
 const DEVICE_KEY_DB_NAME = 'codex-device-keys-v1';
 const DEVICE_KEY_STORE_NAME = 'device-keys';
 const DEVICE_KEY_RECORD_ID = 'primary';
@@ -354,23 +354,7 @@ export async function resetDeviceKeyMaterial() {
   clearDeviceKeyMeta();
 }
 
-export function getStoredDeviceSession() {
-  const raw = readStorage(DEVICE_SESSION_STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-export function storeDeviceSession(payload) {
-  writeStorage(DEVICE_SESSION_STORAGE_KEY, JSON.stringify(payload));
-}
-
 export function clearDeviceSession() {
-  removeStorage(DEVICE_SESSION_STORAGE_KEY);
+  // Remove the legacy browser-readable session cache from pre-cookie-first builds.
+  removeStorage(LEGACY_DEVICE_SESSION_STORAGE_KEY);
 }

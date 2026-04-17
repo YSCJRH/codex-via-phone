@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 ## 只读运维脚本
 
 - `scripts/status-mobile-codex.ps1`
-  只读的脱敏状态输出
+  只读的脱敏状态输出，并包含设备密钥迁移统计
 - `scripts/doctor-mobile-codex.ps1`
   只读的环境与边界体检
 - `scripts/export-mobile-codex-support-bundle.ps1`

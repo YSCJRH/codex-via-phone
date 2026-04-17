@@ -40,6 +40,8 @@ legacy direct 只作为迁移状态保留，已经不再属于默认边界，也
 - `scripts/doctor-mobile-codex.ps1`
 - `scripts/export-mobile-codex-support-bundle.ps1`
 
+脱敏后的状态面也是观察设备密钥迁移状态的主要位置：哪些已批准设备已经登记密钥，哪些还停留在 legacy 状态，以及还有多少 legacy upgrade approval 待处理。
+
 ## 运行时形态
 
 ```text

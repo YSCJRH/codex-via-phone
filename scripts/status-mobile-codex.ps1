@@ -58,7 +58,15 @@ if ($pythonCommand) {
       Write-Output "Local URL: $($status.local_url)"
       Write-Output "Mode URL: $($status.mode_url)"
       Write-Output "Approved devices: $($status.summary.approved_devices)"
+      if ($null -ne $status.summary.approved_devices_with_keys) {
+        Write-Output "Approved devices with keys: $($status.summary.approved_devices_with_keys)"
+        Write-Output "Approved devices pending key migration: $($status.summary.approved_devices_without_keys)"
+      }
       Write-Output "Pending approvals: $($status.summary.pending_approvals)"
+      if ($null -ne $status.summary.pending_legacy_key_upgrades) {
+        Write-Output "Pending legacy key upgrades: $($status.summary.pending_legacy_key_upgrades)"
+        Write-Output "Pending key rotations: $($status.summary.pending_device_key_rotations)"
+      }
     }
     exit 0
   }

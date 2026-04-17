@@ -44,6 +44,8 @@ Approved devices should be tied to a WebCrypto device key. A localStorage UUID m
 
 Browser sessions should remain cookie-first. The default web login flow should not export the auth bearer token into browser storage unless there is an explicitly reviewed need.
 
+Redacted status and support outputs should expose migration counts, not raw key material. It should be possible to see whether legacy approvals still exist without revealing any device public keys or thumbprints.
+
 Web access should stay behind explicit allowlists:
 
 - the app should normally be reached through the local nginx proxy path
