@@ -28,7 +28,7 @@ except ImportError:  # pragma: no cover
     messagebox = None
     
 
-APP_TITLE = "移动 Codex 控制台"
+APP_TITLE = "Mobile Codex Control Panel"
 APP_PORT = 3001
 PROXY_PORT = 8080
 REMOTE_FALLBACK_PORT = 8081
@@ -273,12 +273,10 @@ class ListenerInfo:
     path: str
 
     def summary(self) -> str:
-        parts = [f"端口 {self.port}", f"PID {self.pid}"]
+        parts = [f"port {self.port}", f"PID {self.pid}"]
         if self.name:
             parts.append(self.name)
         return " | ".join(parts)
-
-
 def ensure_stdio_utf8() -> None:
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
@@ -311,7 +309,7 @@ def parse_datetime(value: str | None) -> datetime | None:
 def format_datetime(value: str | None) -> str:
     dt = parse_datetime(value)
     if not dt:
-        return "暂无"
+        return "n/a"
     return dt.astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -325,10 +323,10 @@ def minutes_since(value: str | None) -> float | None:
 def format_age_text(value: str | None) -> str:
     delta = minutes_since(value)
     if delta is None:
-        return "时间未知"
+        return "time unknown"
     if delta < 1:
-        return "刚刚"
-    return f"{int(delta)} 分钟前"
+        return "just now"
+    return f"{int(delta)} min ago"
 
 
 def redacted_label(prefix: str, index: int) -> str:
@@ -444,7 +442,7 @@ def is_recent(value: str | None, minutes: int = PHONE_ACTIVITY_WINDOW_MINUTES) -
 
 def summarize_connection_error(message: str) -> str:
     if "10061" in message:
-        return "端口未监听，服务未启动"
+        return "port is not listening; the service is probably down"
     return message
 
 
@@ -641,26 +639,22 @@ if ($listeners) {{
 
 def describe_listener(listener: ListenerInfo | None) -> str:
     if not listener:
-        return "端口未监听"
+        return "port is not listening"
     return listener.summary()
-
-
 def describe_service(health_ok: bool, health_detail: str, listener: ListenerInfo | None) -> str:
     listener_text = describe_listener(listener)
     if health_ok:
         return f"{listener_text} | {health_detail}" if listener else health_detail
     if listener:
-        return f"{listener_text} | 健康检查未通过：{health_detail}"
+        return f"{listener_text} | health probe failed: {health_detail}"
     return health_detail
-
-
 def normalize_remote_health_detail(detail: str) -> str:
     lowered = detail.lower()
     if "handshake operation timed out" in lowered or "timed out" in lowered:
-        return "本机自检超时，手机端可能仍可访问"
+        return "local probe timed out; the phone may still be able to reach it"
     if "10061" in detail:
-        return "远程入口未监听"
-    return f"本机自检失败：{detail}"
+        return "remote entrypoint is not listening"
+    return f"local probe failed: {detail}"
 
 
 def parse_remote_target_port(target: str | None) -> int | None:
@@ -776,84 +770,6 @@ def is_public_remote_publish(remote: dict[str, Any]) -> bool:
     )
 
 
-"""
-def build_remote_block_v2(remote: dict[str, Any], app_ok: bool, target_ok: bool) -> tuple[StatusBlock, dict[str, Any]]:
-    if not remote["published"]:
-        block = StatusBlock("杩滅▼鍙戝竷", False, "鏈紑鍚?, "杩滅▼鍙戝竷鏈紑鍚?, "error")
-        return block, {"value": "鏈紑鍚?, "detail": block.detail, "level": "error"}
-
-    route_text = summarize_remote_urls(remote)
-    if not app_ok or not target_ok:
-        detail = f"{route_text} | 宸插彂甯冿紝浣嗘湰鍦版湇鍔℃湭鍚姩" if route_text else "宸插彂甯冿紝浣嗘湰鍦版湇鍔℃湭鍚姩"
-        block = StatusBlock("杩滅▼鍙戝竷", False, "宸插彂甯冿紝寰呮湇鍔″惎鍔?, detail, "warning")
-        return block, {"value": "宸插彂甯?, "detail": detail, "level": "warning"}
-
-    if remote["health_ok"]:
-        detail = f"{route_text} | 杩滅▼鍋ュ悍姝ｅ父" if route_text else remote["detail"]
-        block = StatusBlock("杩滅▼鍙戝竷", True, "鍙闂?, detail, "success")
-        return block, {"value": "鍙闂?, "detail": detail, "level": "success"}
-
-    health_summary = normalize_remote_health_detail(remote["health_detail"])
-    detail = f"{route_text} | {health_summary}" if route_text else health_summary
-    block = StatusBlock("杩滅▼鍙戝竷", True, "宸插彂甯冿紝寰呴獙璇?, detail, "warning")
-    return block, {"value": "宸插彂甯?, "detail": detail, "level": "warning"}
-
-
-def build_remote_status_v2(tailscale_status: dict[str, Any], serve_status: dict[str, Any]) -> dict[str, Any]:
-    serve_data = serve_status.get("data") if serve_status.get("ok") else {}
-    tailscale_data = tailscale_status.get("data") if tailscale_status.get("ok") else {}
-    funnel_status = load_funnel_status_text()
-    publication = parse_https_publication_status(funnel_status.get("data") if funnel_status.get("ok") else None)
-    fallback_dns = normalize_dns_name((((tailscale_data or {}).get("Self") or {}).get("DNSName")))
-    endpoints = build_remote_endpoints(serve_data or {}, fallback_dns)
-    if not endpoints:
-        return {
-            "published": False,
-            "url": None,
-            "primary_url": None,
-            "fallback_url": None,
-            "target": None,
-            "detail": "杩滅▼鍙戝竷鏈紑鍚?,
-            "health_ok": False,
-            "health_detail": "鏈墽琛岃繙绋嬪仴搴锋鏌?,
-        }
-
-    primary_endpoint = endpoints[0]
-    fallback_endpoint = next((endpoint for endpoint in endpoints if endpoint["port"] == REMOTE_FALLBACK_PORT), None)
-    target = primary_endpoint.get("target")
-    verified_url: str | None = None
-    health_ok = False
-    health_detail = "鏈墽琛岃繙绋嬪仴搴锋鏌?
-    probe_candidates = []
-    if fallback_endpoint:
-        probe_candidates.append(fallback_endpoint)
-    probe_candidates.extend(
-        endpoint
-        for endpoint in endpoints
-        if endpoint.get("port") not in {80, REMOTE_FALLBACK_PORT}
-    )
-    for endpoint in probe_candidates:
-        probe_url = endpoint["url"]
-        health_ok, health_detail = http_health(f"{probe_url}/health", timeout=2.5)
-        if health_ok:
-            verified_url = probe_url
-            break
-
-    recommended_url = verified_url or (fallback_endpoint["url"] if fallback_endpoint else primary_endpoint["url"])
-    return {
-        "published": True,
-        "url": recommended_url,
-        "primary_url": primary_endpoint["url"],
-        "fallback_url": fallback_endpoint["url"] if fallback_endpoint else None,
-        "target": target,
-        "detail": f"宸插彂甯冨埌 {target}" if target else "杩滅▼鍙戝竷宸插紑鍚?,
-        "health_ok": health_ok,
-        "health_detail": health_detail,
-    }
-
-
-"""
-
 
 def build_remote_block_v2(
     remote: dict[str, Any],
@@ -968,100 +884,37 @@ def build_remote_status_v2(tailscale_status: dict[str, Any], serve_status: dict[
     }
 
 
-def build_remote_block(remote: dict[str, Any], app_ok: bool, proxy_ok: bool) -> tuple[StatusBlock, dict[str, Any]]:
-    if not remote["published"]:
-        block = StatusBlock("远程发布", False, "未开启", "远程发布未开启", "error")
-        return block, {"value": "未开启", "detail": block.detail, "level": "error"}
-
-    target_port = parse_remote_target_port(remote.get("target"))
-    target_label = (
-        "PC 应用服务"
-        if target_port in (None, APP_PORT)
-        else "nginx 代理"
-        if target_port == PROXY_PORT
-        else f"本地端口 {target_port}"
-    )
-
-    if not app_ok or not proxy_ok:
-        detail = f"{remote['url']} | 已发布，但本地服务未启动" if remote["url"] else "已发布，但本地服务未启动"
-        block = StatusBlock("远程发布", False, "已发布，待服务启动", detail, "warning")
-        return block, {"value": "已发布", "detail": detail, "level": "warning"}
-
-    if remote["health_ok"]:
-        detail = f"{remote['url']} | 远程健康正常" if remote["url"] else remote["detail"]
-        block = StatusBlock("远程发布", True, "可访问", detail, "success")
-        return block, {"value": "可访问", "detail": detail, "level": "success"}
-
-    health_summary = normalize_remote_health_detail(remote["health_detail"])
-    detail = f"{remote['url']} | {health_summary}" if remote["url"] else health_summary
-    block = StatusBlock("远程发布", True, "已发布，待验证", detail, "warning")
-    return block, {"value": "已发布", "detail": detail, "level": "warning"}
-
-
 def load_tailscale_status() -> dict[str, Any]:
     if not TAILSCALE.exists():
-        return {"ok": False, "error": f"Tailscale CLI 未找到：{TAILSCALE}"}
+        return {"ok": False, "error": f"Tailscale CLI not found: {TAILSCALE}"}
     result = run_command([str(TAILSCALE), "status", "--json"])
     if result.returncode != 0:
-        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "读取 Tailscale 状态失败"}
+        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "Failed to read Tailscale status."}
     try:
         return {"ok": True, "data": json.loads(result.stdout)}
     except json.JSONDecodeError as exc:
-        return {"ok": False, "error": f"Tailscale 返回的 JSON 无法解析: {exc}"}
+        return {"ok": False, "error": f"Tailscale returned invalid JSON: {exc}"}
 
 
 def load_serve_status() -> dict[str, Any]:
     if not TAILSCALE.exists():
-        return {"ok": False, "error": f"Tailscale CLI 未找到：{TAILSCALE}"}
+        return {"ok": False, "error": f"Tailscale CLI not found: {TAILSCALE}"}
     result = run_command([str(TAILSCALE), "serve", "status", "--json"])
     if result.returncode != 0:
-        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "读取远程发布状态失败"}
+        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "Failed to read Tailscale Serve status."}
     try:
         return {"ok": True, "data": json.loads(result.stdout)}
     except json.JSONDecodeError as exc:
-        return {"ok": False, "error": f"远程发布状态 JSON 无法解析: {exc}"}
+        return {"ok": False, "error": f"Tailscale Serve returned invalid JSON: {exc}"}
 
 
 def load_funnel_status_text() -> dict[str, Any]:
     if not TAILSCALE.exists():
-        return {"ok": False, "error": f"Tailscale CLI 未找到：{TAILSCALE}"}
+        return {"ok": False, "error": f"Tailscale CLI not found: {TAILSCALE}"}
     result = run_command([str(TAILSCALE), "funnel", "status"])
     if result.returncode != 0:
-        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "读取 Funnel 状态失败"}
+        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "Failed to read Tailscale Funnel status."}
     return {"ok": True, "data": result.stdout}
-
-
-def build_remote_status(tailscale_status: dict[str, Any], serve_status: dict[str, Any]) -> dict[str, Any]:
-    serve_data = serve_status.get("data") if serve_status.get("ok") else {}
-    web_entries = list((serve_data or {}).get("Web", {}).items())
-    if not web_entries:
-        return {
-            "published": False,
-            "url": None,
-            "target": None,
-            "detail": "远程发布未开启",
-            "health_ok": False,
-            "health_detail": "未执行远程健康检查",
-        }
-
-    host_and_port, config = web_entries[0]
-    host = str(host_and_port).replace(":443", "")
-    target = (((config or {}).get("Handlers") or {}).get("/") or {}).get("Proxy")
-    tailscale_data = tailscale_status.get("data") if tailscale_status.get("ok") else {}
-    fallback_dns = normalize_dns_name((((tailscale_data or {}).get("Self") or {}).get("DNSName")))
-    url = f"https://{host or fallback_dns}" if (host or fallback_dns) else None
-    health_ok = False
-    health_detail = "未执行远程健康检查"
-    if url:
-        health_ok, health_detail = http_health(f"{url}/health", timeout=2.5)
-    return {
-        "published": True,
-        "url": url,
-        "target": target,
-        "detail": f"已发布到 {target}" if target else "远程发布已开启",
-        "health_ok": health_ok,
-        "health_detail": health_detail,
-    }
 
 
 def pick_mobile_display_name(peer: dict[str, Any]) -> str:
@@ -1074,7 +927,7 @@ def pick_mobile_display_name(peer: dict[str, Any]) -> str:
         return dns_name
     if tail_ip:
         return tail_ip
-    return "未命名手机"
+    return "unnamed-phone"
 
 
 def extract_mobile_peers(tailscale_status: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1156,7 +1009,7 @@ def recent_mobile_requests(limit: int = 6) -> list[dict[str, Any]]:
 
 def tail_error_lines(limit: int = 8) -> list[str]:
     combined = []
-    for label, path in (("后端", APP_STDERR_LOG), ("nginx", NGINX_ERROR_LOG)):
+    for label, path in (("backend", APP_STDERR_LOG), ("nginx", NGINX_ERROR_LOG)):
         lines = tail_lines(path, max_lines=40)
         interesting = [line for line in lines if re.search(r"error|warn|fail|502|trace|deprecat", line, re.I)]
         if interesting:
@@ -1348,7 +1201,7 @@ def list_pending_device_approvals(limit: int = 20) -> list[dict[str, Any]]:
     approvals = []
     for row in rows:
         item = dict(row)
-        item["display_name"] = item.get("device_name") or item.get("device_id") or "未命名设备"
+        item["display_name"] = item.get("device_name") or item.get("device_id") or "unnamed-device"
         approvals.append(item)
     return approvals
 
@@ -1387,7 +1240,7 @@ def list_approved_devices(limit: int = 50) -> list[dict[str, Any]]:
     devices = []
     for row in rows:
         item = dict(row)
-        item["display_name"] = item.get("device_name") or item.get("device_id") or "未命名设备"
+        item["display_name"] = item.get("device_name") or item.get("device_id") or "unnamed-device"
         devices.append(item)
     return devices
 
@@ -1654,15 +1507,15 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
     )
 
     tailscale_data = tailscale_status.get("data") if tailscale_status.get("ok") else {}
-    backend_state = (tailscale_data.get("BackendState") if tailscale_data else None) or "不可用"
+    backend_state = (tailscale_data.get("BackendState") if tailscale_data else None) or "unavailable"
     dns_name = normalize_dns_name((((tailscale_data or {}).get("Self") or {}).get("DNSName")))
     tailscale_error = str(tailscale_status.get("error") or "")
     tailscale_permission_blind = "Access is denied" in tailscale_error
-    current_device = peers[0]["display_name"] if peers else "暂未发现手机设备"
+    current_device = peers[0]["display_name"] if peers else "no mobile device detected yet"
     latest_activity_summary = (
-        f"{recent_requests[0]['path']} · {format_datetime(latest_request_time)}"
+        f"{recent_requests[0]['path']} at {format_datetime(latest_request_time)}"
         if recent_requests
-        else "暂无手机访问记录"
+        else "no recent phone access recorded"
     )
     mode_block, mode_summary = build_remote_block_v2(
         remote,
@@ -1672,43 +1525,41 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
         show_sensitive=show_sensitive,
     )
     mode_available = remote["published"] and remote_target_ok
-
     tailscale_running = bool(tailscale_status.get("ok") and backend_state == "Running")
-    tailscale_headline = "运行中" if tailscale_running else backend_state
-    tailscale_detail = dns_name or tailscale_status.get("error", "未获取到域名")
+    tailscale_headline = "running" if tailscale_running else backend_state
+    tailscale_detail = dns_name or tailscale_status.get("error", "no tailnet DNS name available")
     tailscale_level = "success" if tailscale_running else "error"
     if tailscale_permission_blind:
-        tailscale_headline = "权限盲区"
+        tailscale_headline = "permission blind"
         tailscale_detail = (
-            "当前进程无权访问 tailscaled LocalAPI；请在提升权限的终端中复查。"
+            "This process cannot reach the tailscaled LocalAPI. Re-run from an elevated terminal to inspect it."
             if not tailscale_error
-            else f"当前进程无权访问 tailscaled LocalAPI；原始错误：{tailscale_error}"
+            else f"This process cannot reach the tailscaled LocalAPI. Original error: {tailscale_error}"
         )
         tailscale_level = "warning"
-
     auto_start_installed = bool(auto_start["installed"])
     auto_start_enabled = bool(auto_start["config"]["enabled"]) if auto_start_installed else False
     auto_start_last_result = str(auto_start["state"]["lastResult"])
     auto_start_last_error = auto_start["state"]["lastError"]
-    auto_start_value = "未安装"
+    auto_start_value = "not installed"
     auto_start_level = "warning"
     auto_start_detail_parts: list[str] = []
     if not auto_start_installed:
-        auto_start_detail_parts.append("运行 install-mobile-codex-autostart.ps1 以启用登录后自启动。")
+        auto_start_detail_parts.append("Run install-mobile-codex-autostart.ps1 to enable start-on-sign-in automation.")
     else:
-        auto_start_value = "已启用" if auto_start_enabled else "已停用"
+        auto_start_value = "enabled" if auto_start_enabled else "disabled"
         auto_start_detail_parts.extend(
             [
-                f"登录后 {auto_start['config']['startupDelaySeconds']}s",
-                f"看门狗 {auto_start['config']['watchdogIntervalMinutes']}m",
+                f"startup delay {auto_start['config']['startupDelaySeconds']}s",
+                f"watchdog {auto_start['config']['watchdogIntervalMinutes']}m",
             ]
         )
         if auto_start["state"]["lastRunAt"]:
-            auto_start_detail_parts.append(f"上次 {format_datetime(auto_start['state']['lastRunAt'])}")
+            auto_start_detail_parts.append(f"last run {format_datetime(auto_start['state']['lastRunAt'])}")
         if auto_start_last_result and auto_start_last_result != "not-run":
-            auto_start_detail_parts.append(f"结果 {auto_start_last_result}")
+            auto_start_detail_parts.append(f"result {auto_start_last_result}")
         if auto_start_last_error:
-            auto_start_detail_parts.append(f"错误 {auto_start_last_error}")
+            auto_start_detail_parts.append(f"error {auto_start_last_error}")
         auto_start_level = "success" if auto_start_enabled else "warning"
         if auto_start_last_result in {
             "start-failed",
@@ -1736,13 +1587,12 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
             f"key rotation approvals {pending_device_key_rotations}",
         ]
     )
-
     blocks = [
-        StatusBlock("PC 应用服务", app_ok, "运行中" if app_ok else "未启动", app_detail, "success" if app_ok else "error"),
+        StatusBlock("PC app", app_ok, "running" if app_ok else "stopped", app_detail, "success" if app_ok else "error"),
         StatusBlock(
-            "nginx 代理",
+            "nginx proxy",
             proxy_ok if proxy_required else True,
-            "运行中" if proxy_ok else "未启动" if proxy_required else "不需要",
+            "running" if proxy_ok else "stopped" if proxy_required else "not required",
             proxy_detail,
             "success" if (proxy_ok or not proxy_required) else "error",
         ),
@@ -1769,21 +1619,20 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
             device_trust_level,
         ),
         StatusBlock(
-            "手机连接状态",
+            "Mobile connectivity",
             mobile_online > 0,
-            f"{mobile_online}/{len(peers)} 在线",
+            f"{mobile_online}/{len(peers)} online",
             current_device,
             "success" if mobile_online > 0 else "error",
         ),
         StatusBlock(
-            "手机最近访问",
+            "Recent phone activity",
             recent_phone_activity,
-            "最近 10 分钟内有访问" if recent_phone_activity else "最近 10 分钟内无访问",
+            "active within 10 minutes" if recent_phone_activity else "no activity within 10 minutes",
             latest_activity_summary,
             "success" if recent_phone_activity else "error",
         ),
     ]
-
     return {
         "checked_at": now_local().strftime("%Y-%m-%d %H:%M:%S"),
         "local_url": LOCAL_PANEL_URL,
@@ -1848,13 +1697,15 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
             "healthy_local_services": int(app_ok) + (int(proxy_ok) if proxy_required else 0),
             "total_local_services": 2 if proxy_required else 1,
             "listener_summary": {
-                str(APP_PORT): app_listener.summary() if app_listener else ("健康检查通过，但未读到监听进程" if app_ok else "端口未监听"),
+                str(APP_PORT): app_listener.summary()
+                if app_listener
+                else ("health check passed but listener probe did not find a bound port" if app_ok else "port is not listening"),
                 str(PROXY_PORT): (
                     proxy_listener.summary()
                     if proxy_listener
                     else "not required (legacy-direct)"
                     if not proxy_required
-                    else "端口未监听"
+                    else "port is not listening"
                 ),
             },
         },
@@ -1989,21 +1840,18 @@ def perform_action(action: str, *, assume_yes: bool = False) -> str:
 
 class ControlApp:
     REFRESH_MS = 15000
-
     def __init__(self) -> None:
         if tk is None:
-            raise RuntimeError("当前 Python 环境缺少 tkinter，无法显示桌面界面")
-
+            raise RuntimeError("The current Python environment is missing tkinter, so the desktop UI cannot be shown.")
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
         self.root.geometry("1260x900")
         self.root.minsize(1120, 800)
         self.root.configure(bg="#eef3f8")
-
-        self.status_text = tk.StringVar(value="就绪")
-        self.last_refresh_text = tk.StringVar(value="尚未刷新")
-        self.local_url_text = tk.StringVar(value=f"本地面板：{LOCAL_PANEL_URL}")
-        self.remote_url_text = tk.StringVar(value="模式入口：localhost")
+        self.status_text = tk.StringVar(value="Idle")
+        self.last_refresh_text = tk.StringVar(value="Not refreshed yet")
+        self.local_url_text = tk.StringVar(value=f"Local panel: {LOCAL_PANEL_URL}")
+        self.remote_url_text = tk.StringVar(value="Mode endpoint: localhost")
         self.show_sensitive = tk.BooleanVar(value=False)
         self.sensitive_warning_text = tk.StringVar(value="")
         self.block_labels: list[dict[str, tk.Label]] = []
@@ -2011,14 +1859,11 @@ class ControlApp:
         self.pending_approval_items: list[dict[str, Any]] = []
         self.selected_approval_token: str | None = None
         self._busy = False
-
         self._build_ui()
         self.refresh_status()
-
     def _build_ui(self) -> None:
         container = tk.Frame(self.root, bg="#eef3f8")
         container.pack(fill="both", expand=True, padx=14, pady=14)
-
         title = tk.Label(
             container,
             text=APP_TITLE,
@@ -2027,16 +1872,14 @@ class ControlApp:
             fg="#112033",
         )
         title.pack(anchor="w")
-
         subtitle = tk.Label(
             container,
-            text="用于在电脑端一键控制 Codex 服务，并集中查看本机服务、远程发布与手机连接状态。",
+            text="Use this desktop dashboard to control the local Codex stack and review service health, access mode, and trusted device state in one place.",
             font=("Microsoft YaHei UI", 10),
             bg="#eef3f8",
             fg="#4f6072",
         )
         subtitle.pack(anchor="w", pady=(4, 10))
-
         endpoint_bar = tk.Frame(container, bg="#dbe8f6", bd=1, relief="solid")
         endpoint_bar.pack(fill="x", pady=(0, 12))
         tk.Label(
@@ -2053,18 +1896,17 @@ class ControlApp:
             bg="#dbe8f6",
             fg="#17324d",
         ).pack(anchor="w", padx=12, pady=(0, 10))
-
         summary_strip = tk.Frame(container, bg="#eef3f8")
         summary_strip.pack(fill="x", pady=(0, 12))
         for index, (key, title_text, hint) in enumerate(
             [
-                ("services", "本机服务", "健康服务数量"),
-                ("autostart", "自动启动", "登录后自动启动与低频保活"),
-                ("mode", "访问模式", "localhost / tailnet-private / public-funnel"),
-                ("mobile", "手机在线", "手机设备在线情况"),
-                ("whitelist", "设备白名单", "已批准设备数量"),
-                ("approvals", "待审批", "首次登录待电脑授权"),
-                ("activity", "最近访问", "近 10 分钟活跃度"),
+                ("services", "Local services", "Healthy service count"),
+                ("autostart", "Autostart", "Start on sign-in and low-frequency keepalive"),
+                ("mode", "Access mode", "localhost / tailnet-private / public-funnel"),
+                ("mobile", "Mobile online", "Connected mobile device count"),
+                ("whitelist", "Trusted devices", "Approved devices and key migration state"),
+                ("approvals", "Pending approvals", "First-time and migration approvals waiting on desktop"),
+                ("activity", "Recent activity", "Phone activity in the last 10 minutes"),
             ]
         ):
             card = tk.Frame(summary_strip, bg="white", bd=1, relief="solid")
@@ -2090,21 +1932,19 @@ class ControlApp:
             )
             detail_label.pack(anchor="w", padx=12, pady=(2, 12))
             self.metric_widgets[key] = {"frame": card, "value": value_label, "detail": detail_label}
-
         actions = tk.Frame(container, bg="#eef3f8")
         actions.pack(fill="x", pady=(0, 12))
-
         buttons = [
-            ("刷新状态", "#1f6feb", lambda: self.run_background("正在刷新状态...", self._refresh_action)),
-            ("启动服务", "#0f9d58", lambda: self.run_background("正在启动整套服务...", lambda: self._action_and_refresh("start"))),
-            ("停止服务", "#d93025", lambda: self.run_background("正在停止整套服务...", lambda: self._action_and_refresh("stop"))),
-            ("启用 tailnet-private", "#0b7285", self._confirm_tailnet_private_enable),
-            ("关闭 tailnet-private", "#4c6f7a", lambda: self.run_background("正在关闭 tailnet-private...", lambda: self._action_and_refresh("disable_tailnet_private"))),
-            ("发布 public-funnel", "#c2410c", self._confirm_public_funnel_publish),
-            ("关闭 public-funnel", "#9a3412", lambda: self.run_background("正在关闭 public-funnel...", lambda: self._action_and_refresh("unpublish_public_funnel"))),
+            ("Refresh", "#1f6feb", lambda: self.run_background("Refreshing status...", self._refresh_action)),
+            ("Start stack", "#0f9d58", lambda: self.run_background("Starting the full stack...", lambda: self._action_and_refresh("start"))),
+            ("Stop stack", "#d93025", lambda: self.run_background("Stopping the full stack...", lambda: self._action_and_refresh("stop"))),
+            ("Enable tailnet-private", "#0b7285", self._confirm_tailnet_private_enable),
+            ("Disable tailnet-private", "#4c6f7a", lambda: self.run_background("Disabling tailnet-private...", lambda: self._action_and_refresh("disable_tailnet_private"))),
+            ("Publish public-funnel", "#c2410c", self._confirm_public_funnel_publish),
+            ("Disable public-funnel", "#9a3412", lambda: self.run_background("Disabling public-funnel...", lambda: self._action_and_refresh("unpublish_public_funnel"))),
             ("Enable remote approvals (60m)", "#2b8a3e", lambda: self.run_background("Enabling remote desktop approvals...", lambda: self._action_and_refresh("enable_desktop_approvals"))),
             ("Disable remote approvals", "#8d6e63", lambda: self.run_background("Disabling remote desktop approvals...", lambda: self._action_and_refresh("disable_desktop_approvals"))),
-            ("打开本地面板", "#5f3dc4", lambda: self.run_background("正在打开本地面板...", lambda: perform_action("open_local"))),
+            ("Open local panel", "#5f3dc4", lambda: self.run_background("Opening the local panel...", lambda: perform_action("open_local"))),
         ]
         for text, color, callback in buttons:
             tk.Button(
@@ -2121,7 +1961,6 @@ class ControlApp:
                 pady=8,
                 cursor="hand2",
             ).pack(side="left", padx=(0, 8))
-
         info_row = tk.Frame(container, bg="#eef3f8")
         info_row.pack(fill="x", pady=(0, 12))
         tk.Label(
@@ -2138,18 +1977,17 @@ class ControlApp:
             bg="#eef3f8",
             fg="#4f6072",
         ).pack(side="right")
-
         warning_row = tk.Frame(container, bg="#eef3f8")
         warning_row.pack(fill="x", pady=(0, 12))
         tk.Checkbutton(
             warning_row,
-            text="显示敏感信息（危险）",
+            text="Show sensitive values (dangerous)",
             variable=self.show_sensitive,
             bg="#eef3f8",
             fg="#8a1c1c",
             activebackground="#eef3f8",
             activeforeground="#8a1c1c",
-            command=lambda: self.run_background("正在刷新状态...", self._refresh_action, skip_if_busy=True, show_pending=False),
+            command=lambda: self.run_background("Refreshing status...", self._refresh_action, skip_if_busy=True, show_pending=False),
         ).pack(side="left")
         tk.Label(
             warning_row,
@@ -2158,7 +1996,6 @@ class ControlApp:
             bg="#eef3f8",
             fg="#b42318",
         ).pack(side="left", padx=(12, 0))
-
         grid = tk.Frame(container, bg="#eef3f8")
         grid.pack(fill="x", pady=(0, 12))
         for index in range(7):
@@ -2166,7 +2003,6 @@ class ControlApp:
             row, col = divmod(index, 3)
             frame.grid(row=row, column=col, padx=6, pady=6, sticky="nsew")
             grid.grid_columnconfigure(col, weight=1)
-
             title_label = tk.Label(frame, text="--", font=("Microsoft YaHei UI", 11, "bold"), bg="white", fg="#10243d", anchor="w")
             title_label.pack(fill="x", padx=12, pady=(12, 4))
             state_label = tk.Label(frame, text="--", font=("Microsoft YaHei UI", 16, "bold"), bg="white", fg="#4f6072", anchor="w")
@@ -2183,30 +2019,28 @@ class ControlApp:
             )
             detail_label.pack(fill="x", padx=12, pady=(4, 12))
             self.block_labels.append({"frame": frame, "title": title_label, "state": state_label, "detail": detail_label})
-
         approval_frame = tk.Frame(container, bg="white", bd=1, relief="solid")
         approval_frame.pack(fill="x", pady=(0, 12))
         tk.Label(
             approval_frame,
-            text="首次登录电脑授权",
+            text="Desktop approval queue",
             font=("Microsoft YaHei UI", 12, "bold"),
             bg="white",
             fg="#10243d",
         ).pack(anchor="w", padx=12, pady=(12, 4))
         tk.Label(
             approval_frame,
-            text="新设备首次登录会进入待审批列表。请在电脑上核对设备信息后，再决定是否加入白名单。",
+            text="New devices and trust migrations wait here until you review them on the PC.",
             font=("Microsoft YaHei UI", 9),
             bg="white",
             fg="#5a6c7f",
         ).pack(anchor="w", padx=12, pady=(0, 8))
-
         approval_actions = tk.Frame(approval_frame, bg="white")
         approval_actions.pack(fill="x", padx=12, pady=(0, 10))
         for text, color, callback in [
-            ("刷新审批", "#1f6feb", lambda: self.run_background("正在刷新审批列表...", self._refresh_action)),
-            ("批准所选", "#0f9d58", lambda: self._resolve_selected_request(True)),
-            ("拒绝所选", "#d93025", lambda: self._resolve_selected_request(False)),
+            ("Refresh approvals", "#1f6feb", lambda: self.run_background("Refreshing approvals...", self._refresh_action)),
+            ("Approve selected", "#0f9d58", lambda: self._resolve_selected_request(True)),
+            ("Reject selected", "#d93025", lambda: self._resolve_selected_request(False)),
         ]:
             tk.Button(
                 approval_actions,
@@ -2222,15 +2056,13 @@ class ControlApp:
                 pady=7,
                 cursor="hand2",
             ).pack(side="left", padx=(0, 8))
-
         approval_body = tk.Frame(approval_frame, bg="white")
         approval_body.pack(fill="x", padx=12, pady=(0, 12))
-
         approval_list_frame = tk.Frame(approval_body, bg="white")
         approval_list_frame.pack(side="left", fill="both", expand=False)
         tk.Label(
             approval_list_frame,
-            text="待审批设备",
+            text="Pending requests",
             font=("Microsoft YaHei UI", 10, "bold"),
             bg="white",
             fg="#17324d",
@@ -2254,33 +2086,27 @@ class ControlApp:
         self.approval_listbox.pack(side="left", fill="both", expand=True)
         self.approval_listbox.bind("<<ListboxSelect>>", self._on_approval_selected)
         approval_scroll.config(command=self.approval_listbox.yview)
-
         approval_detail_frame = tk.Frame(approval_body, bg="white")
         approval_detail_frame.pack(side="left", fill="both", expand=True, padx=(12, 0))
         tk.Label(
             approval_detail_frame,
-            text="设备详情",
+            text="Request details",
             font=("Microsoft YaHei UI", 10, "bold"),
             bg="white",
             fg="#17324d",
         ).pack(anchor="w", pady=(0, 6))
         self.approval_detail_text = self._build_text_panel_body(approval_detail_frame, height=8)
-
         bottom = tk.PanedWindow(container, orient="horizontal", bg="#eef3f8", sashrelief="flat")
         bottom.pack(fill="both", expand=True)
-
-        self.devices_text = self._build_text_panel(bottom, "手机在线设备")
-        self.whitelist_text = self._build_text_panel(bottom, "设备白名单")
-        self.requests_text = self._build_text_panel(bottom, "最近手机访问")
-        self.diagnostics_text = self._build_text_panel(bottom, "诊断信息")
-
+        self.devices_text = self._build_text_panel(bottom, "Online mobile devices")
+        self.whitelist_text = self._build_text_panel(bottom, "Trusted devices")
+        self.requests_text = self._build_text_panel(bottom, "Recent phone requests")
+        self.diagnostics_text = self._build_text_panel(bottom, "Diagnostics")
     def _build_text_panel(self, parent: tk.PanedWindow, title: str) -> tk.Text:
         frame = tk.Frame(parent, bg="white", bd=1, relief="solid")
         parent.add(frame, stretch="always")
-
         tk.Label(frame, text=title, font=("Microsoft YaHei UI", 11, "bold"), bg="white", fg="#10243d").pack(anchor="w", padx=10, pady=(10, 6))
         return self._build_text_panel_body(frame)
-
     def _build_text_panel_body(self, parent: tk.Frame, height: int = 18) -> tk.Text:
         text_frame = tk.Frame(parent, bg="white")
         text_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
@@ -2299,48 +2125,40 @@ class ControlApp:
         text.pack(fill="both", expand=True)
         scrollbar.config(command=text.yview)
         return text
-
     def _render_text(self, widget: tk.Text, content: str) -> None:
         widget.configure(state="normal")
         widget.delete("1.0", "end")
         widget.insert("1.0", content)
         widget.configure(state="disabled")
-
     def _on_approval_selected(self, _event: Any = None) -> None:
         selection = self.approval_listbox.curselection()
         if not selection:
             self.selected_approval_token = None
-            self._render_text(self.approval_detail_text, "请选择一条待审批设备，查看详情并执行批准或拒绝。")
+            self._render_text(self.approval_detail_text, "Select a pending device to inspect it and approve or reject it.")
             return
-
         index = selection[0]
         if index >= len(self.pending_approval_items):
             self.selected_approval_token = None
-            self._render_text(self.approval_detail_text, "当前选择的设备信息已失效，请先刷新。")
+            self._render_text(self.approval_detail_text, "The selected device record is no longer valid. Refresh first.")
             return
-
         item = self.pending_approval_items[index]
         self.selected_approval_token = str(item["request_token"])
         self._render_pending_approval_detail()
-
     def _render_pending_approval_list(self, items: list[dict[str, Any]]) -> None:
         previous_token = self.selected_approval_token
         self.pending_approval_items = items
-
         self.approval_listbox.delete(0, "end")
         for item in items:
             line = (
-                f"{item.get('username') or '未知账号'} | "
-                f"{item.get('display_name') or '未命名设备'} | "
+                f"{item.get('username') or 'unknown-account'} | "
+                f"{item.get('display_name') or 'unnamed-device'} | "
                 f"{format_age_text(item.get('created_at'))}"
             )
             self.approval_listbox.insert("end", line)
-
         if not items:
             self.selected_approval_token = None
-            self._render_text(self.approval_detail_text, "当前没有待审批设备。")
+            self._render_text(self.approval_detail_text, "There are no pending device approvals right now.")
             return
-
         selected_index = next(
             (index for index, item in enumerate(items) if str(item["request_token"]) == previous_token),
             0,
@@ -2350,63 +2168,56 @@ class ControlApp:
         self.approval_listbox.activate(selected_index)
         self.selected_approval_token = str(items[selected_index]["request_token"])
         self._render_pending_approval_detail()
-
     def _render_pending_approval_detail(self) -> None:
         if not self.selected_approval_token:
-            self._render_text(self.approval_detail_text, "请选择一条待审批设备，查看详情并执行批准或拒绝。")
+            self._render_text(self.approval_detail_text, "Select a pending device to inspect it and approve or reject it.")
             return
-
         item = next(
             (entry for entry in self.pending_approval_items if str(entry["request_token"]) == self.selected_approval_token),
             None,
         )
         if item is None:
-            self._render_text(self.approval_detail_text, "当前选择的设备信息已失效，请先刷新。")
+            self._render_text(self.approval_detail_text, "The selected device record is no longer valid. Refresh first.")
             return
-
         content = "\n".join(
             [
-                f"账号：{item.get('username') or '未知'}",
-                f"设备名称：{item.get('display_name') or '未命名设备'}",
-                f"设备 ID：{item.get('device_id') or '暂无'}",
-                f"平台：{item.get('platform') or '暂无'}",
-                f"客户端类型：{item.get('app_type') or '暂无'}",
-                f"请求 IP：{item.get('requested_ip') or '暂无'}",
-                f"申请时间：{format_datetime(item.get('created_at'))}",
+                f"Account: {item.get('username') or 'unknown'}",
+                f"Device name: {item.get('display_name') or 'unnamed-device'}",
+                f"Device ID: {item.get('device_id') or 'n/a'}",
+                f"Platform: {item.get('platform') or 'n/a'}",
+                f"Client type: {item.get('app_type') or 'n/a'}",
+                f"Approval type: {item.get('approval_kind') or 'new-device'}",
+                f"Device key: {'present' if item.get('has_device_key') else 'missing'}",
+                f"Request IP: {item.get('requested_ip') or 'n/a'}",
+                f"Requested at: {format_datetime(item.get('created_at'))}",
                 "",
-                "请求 UA：",
-                item.get("requested_user_agent") or "暂无",
+                "User agent:",
+                item.get("requested_user_agent") or "n/a",
                 "",
-                "确认无误后，可在上方点击“批准所选”加入白名单。",
+                "Approve only after the device details look correct.",
             ]
         )
         self._render_text(self.approval_detail_text, content)
-
     def _resolve_selected_request(self, approved: bool) -> None:
         if not self.selected_approval_token:
-            self.status_text.set("请先选择一条待审批设备。")
+            self.status_text.set("Select a pending device first.")
             return
-
-        action_text = "批准" if approved else "拒绝"
+        action_text = "approved" if approved else "rejected"
         token = self.selected_approval_token
-
         def task() -> str:
             current = next(
                 (entry for entry in self.pending_approval_items if str(entry["request_token"]) == token),
                 None,
             )
             if not current:
-                raise RuntimeError("待审批设备已不存在，请先刷新。")
+                raise RuntimeError("The pending device request no longer exists. Refresh first.")
             if not resolve_device_request(token, approved):
-                raise RuntimeError("审批未生效，请刷新后重试。")
-
+                raise RuntimeError("The approval did not take effect. Refresh and try again.")
             status = collect_status(show_sensitive=bool(self.show_sensitive.get()), include_internal=True)
             self.root.after(0, lambda: self.apply_status(status))
-            device_name = current.get("display_name") or current.get("device_id") or "该设备"
-            return f"已{action_text}设备：{device_name}"
-
-        self.run_background(f"正在{action_text}所选设备...", task)
-
+            device_name = current.get("display_name") or current.get("device_id") or "this device"
+            return f"Successfully {action_text}: {device_name}"
+        self.run_background(f"Applying {action_text}...", task)
     @staticmethod
     def _level_theme(level: str) -> tuple[str, str, str]:
         if level == "success":
@@ -2414,61 +2225,54 @@ class ControlApp:
         if level == "warning":
             return "#fff7e8", "#b26a00", "#b26a00"
         return "#fff2f0", "#d93025", "#d93025"
-
     def _refresh_action(self) -> str:
         status = collect_status(show_sensitive=bool(self.show_sensitive.get()), include_internal=True)
         self.root.after(0, lambda: self.apply_status(status))
-        return "状态已刷新"
-
+        return "Status refreshed."
     def _action_and_refresh(self, action: str, *, assume_yes: bool = False) -> str:
         message = perform_action(action, assume_yes=assume_yes)
         status = collect_status(show_sensitive=bool(self.show_sensitive.get()), include_internal=True)
         self.root.after(0, lambda: self.apply_status(status))
         return message
-
     def _confirm_tailnet_private_enable(self) -> None:
         if not messagebox:
             self.run_background(
-                "正在启用 tailnet-private...",
+                "Enabling tailnet-private...",
                 lambda: self._action_and_refresh("enable_tailnet_private"),
             )
             return
-
         confirmed = messagebox.askyesno(
             "Enable tailnet-private",
-            "tailnet-private 会通过 Tailscale Serve HTTPS 暴露一个仅 tailnet 可访问的入口。\n\n"
-            "应用本身仍保持 localhost-only，Funnel 不会启用。\n\n"
-            "是否继续？",
+            "tailnet-private exposes a tailnet-only HTTPS route through Tailscale Serve.\n\n"
+            "The app itself stays localhost-only, and Funnel stays disabled.\n\n"
+            "Continue?",
             icon="warning",
         )
         if confirmed:
             self.run_background(
-                "正在启用 tailnet-private...",
+                "Enabling tailnet-private...",
                 lambda: self._action_and_refresh("enable_tailnet_private"),
             )
-
     def _confirm_public_funnel_publish(self) -> None:
         if not messagebox:
             self.run_background(
-                "正在发布 public-funnel...",
+                "Publishing public-funnel...",
                 lambda: self._action_and_refresh("publish_public_funnel", assume_yes=True),
             )
             return
-
         confirmed = messagebox.askyesno(
             "Publish public-funnel",
-            "DANGER: public-funnel 会创建公网入口。\n\n"
-            "请求将通过 Tailscale Funnel HTTPS -> 本机 nginx -> localhost app。\n"
-            "这不应该作为默认模式，也不会自动持久化。\n\n"
-            "只有在你明确需要公网访问时才继续。是否确认发布？",
+            "DANGER: public-funnel creates a public internet entrypoint.\n\n"
+            "Traffic will flow through Tailscale Funnel HTTPS -> local nginx -> localhost app.\n"
+            "This is never the default mode and should not be left on casually.\n\n"
+            "Publish it now?",
             icon="warning",
         )
         if confirmed:
             self.run_background(
-                "正在发布 public-funnel...",
+                "Publishing public-funnel...",
                 lambda: self._action_and_refresh("publish_public_funnel", assume_yes=True),
             )
-
     def run_background(
         self,
         pending_message: str,
@@ -2478,145 +2282,38 @@ class ControlApp:
     ) -> None:
         if self._busy:
             if not skip_if_busy:
-                self.status_text.set("已有任务进行中，请稍候...")
+                self.status_text.set("Another task is already running. Please wait.")
             return
-
         self._busy = True
         if show_pending:
             self.status_text.set(pending_message)
-
         def worker() -> None:
             try:
                 message = task()
                 self.root.after(0, lambda: self.status_text.set(message))
             except Exception as exc:  # noqa: BLE001
-                self.root.after(0, lambda: self.status_text.set(f"操作失败：{exc}"))
+                self.root.after(0, lambda: self.status_text.set(f"Action failed: {exc}"))
             finally:
                 self.root.after(0, self._mark_idle)
-
         threading.Thread(target=worker, daemon=True).start()
-
     def _mark_idle(self) -> None:
         self._busy = False
-
     def refresh_status(self) -> None:
-        self.run_background("正在刷新状态...", self._refresh_action, skip_if_busy=True, show_pending=False)
+        self.run_background("Refreshing status...", self._refresh_action, skip_if_busy=True, show_pending=False)
         self.root.after(self.REFRESH_MS, self.refresh_status)
-
     def apply_status(self, status: dict[str, Any]) -> None:
         summary = status["summary"]
-        self.last_refresh_text.set(f"最近刷新：{status['checked_at']}")
-        self.local_url_text.set(f"本地面板：{status['local_url']}")
-        self.remote_url_text.set(f"模式入口：{status['mode_url'] or 'localhost'}")
-        self.sensitive_warning_text.set("敏感信息显示已开启，请勿截图或导出。" if self.show_sensitive.get() else "")
-
-        metric_values = {
-            "services": (
-                f"{summary['healthy_local_services']}/{summary['total_local_services']} 正常",
-                f"3001：{summary['listener_summary'][str(APP_PORT)]} | 8080：{summary['listener_summary'][str(PROXY_PORT)]}",
-                "success" if summary["healthy_local_services"] == summary["total_local_services"] else "error",
-            ),
-            "autostart": (
-                summary["autostart_value"],
-                summary["autostart_detail"],
-                summary["autostart_level"],
-            ),
-            "mode": (
-                summary["mode_value"],
-                summary["mode_detail"],
-                summary["mode_level"],
-            ),
-            "mobile": (
-                f"{summary['mobile_online']}/{summary['mobile_total']}",
-                "至少有一台手机在线" if summary["mobile_online"] else "当前没有手机在线",
-                "success" if summary["mobile_online"] > 0 else "error",
-            ),
-            "whitelist": (
-                f"{summary['approved_devices']} 台",
-                "已加入白名单的登录设备",
-                "success" if summary["approved_devices"] > 0 else "warning",
-            ),
-            "approvals": (
-                f"{summary['pending_approvals']} 条",
-                "新设备首次登录需在电脑端批准",
-                "warning" if summary["pending_approvals"] > 0 else "success",
-            ),
-            "activity": (
-                f"{summary['recent_phone_requests']} 条",
-                f"WebSocket {summary['recent_phone_websockets']} 条 | {'最近有活跃访问' if summary['recent_phone_activity'] else '最近无活跃访问'}",
-                "success" if summary["recent_phone_activity"] else "error",
-            ),
-        }
-        for key, (value, detail, level) in metric_values.items():
-            widgets = self.metric_widgets[key]
-            background, color, _ = self._level_theme(level)
-            widgets["frame"].configure(bg=background)
-            widgets["value"].configure(text=value, fg=color, bg=background)
-            for child in widgets["frame"].winfo_children():
-                child.configure(bg=background)
-            widgets["detail"].configure(text=detail, bg=background)
-
-        for labels, block in zip(self.block_labels, status["blocks"], strict=False):
-            frame_color, text_color, _ = self._level_theme(block.get("level", "error"))
-            labels["frame"].configure(bg=frame_color)
-            labels["title"].configure(text=block["label"], bg=frame_color)
-            labels["state"].configure(text=block["headline"], fg=text_color, bg=frame_color)
-            labels["detail"].configure(text=block["detail"], bg=frame_color)
-
-        devices_lines = []
-        for peer in status["mobile_peers"]:
-            devices_lines.append(
-                f"{peer['display_name']}\n"
-                f"  系统：{peer['os']}\n"
-                f"  在线：{'是' if peer['online'] else '否'}\n"
-                f"  活跃：{'是' if peer['active'] else '否'}\n"
-                f"  Tail IP：{peer['tail_ip'] or '暂无'}\n"
-                f"  最近握手：{format_datetime(peer['last_handshake'])}\n"
-                f"  最近出现：{format_datetime(peer['last_seen'])}\n"
-                f"  中继区域：{peer['relay'] or '暂无'}\n"
-            )
-        self._render_text(self.devices_text, "\n".join(devices_lines) if devices_lines else "暂未检测到手机设备。")
-
-        whitelist_lines = []
-        for item in status["approved_devices"]:
-            whitelist_lines.append(
-                f"{item['display_name']}\n"
-                f"  账号：{item.get('username') or '未知'}\n"
-                f"  设备 ID：{item.get('device_id') or '暂无'}\n"
-                f"  平台：{item.get('platform') or '暂无'}\n"
-                f"  类型：{item.get('app_type') or '暂无'}\n"
-                f"  首次批准：{format_datetime(item.get('first_approved_at'))}\n"
-                f"  最近登录：{format_datetime(item.get('last_login'))}\n"
-                f"  最近来源 IP：{item.get('last_ip') or '暂无'}\n"
-            )
-        self._render_text(self.whitelist_text, "\n".join(whitelist_lines) if whitelist_lines else "当前设备白名单为空。")
-
-        request_lines = []
-        for item in status["recent_mobile_requests"]:
-            request_lines.append(
-                f"{format_datetime(item['time'])}（{format_age_text(item['time'])}）\n"
-                f"  请求：{item['method']} {item['path']}\n"
-                f"  状态码：{item['status']}  来源 IP：{item['ip']}\n"
-                f"  UA：{item['user_agent']}\n"
-            )
-        self._render_text(self.requests_text, "\n".join(request_lines) if request_lines else "最近没有检测到手机访问。")
-        self._render_text(self.diagnostics_text, "\n".join(status["diagnostics"]) if status["diagnostics"] else "最近没有诊断告警。")
-        self._render_pending_approval_list(status["pending_device_approvals"])
-
-    def apply_status(self, status: dict[str, Any]) -> None:
-        summary = status["summary"]
-        self.last_refresh_text.set(f"最近刷新：{status['checked_at']}")
-        self.local_url_text.set(f"本地面板：{status['local_url']}")
-        self.remote_url_text.set(f"模式入口：{status['mode_url'] or 'localhost'}")
+        self.last_refresh_text.set(f"Last refresh: {status['checked_at']}")
+        self.local_url_text.set(f"Local panel: {status['local_url']}")
+        self.remote_url_text.set(f"Mode endpoint: {status['mode_url'] or 'localhost'}")
         self.sensitive_warning_text.set(
-            "敏感信息显示已开启，请勿截图或导出。"
+            "Sensitive values are visible. Avoid screenshots and exports."
             if self.show_sensitive.get()
             else ""
         )
-
         metric_values = {
             "services": (
-                f"{summary['healthy_local_services']}/{summary['total_local_services']} 正常",
+                f"{summary['healthy_local_services']}/{summary['total_local_services']} healthy",
                 f"3001: {summary['listener_summary'][str(APP_PORT)]} | 8080: {summary['listener_summary'][str(PROXY_PORT)]}",
                 "success" if summary["healthy_local_services"] == summary["total_local_services"] else "error",
             ),
@@ -2632,22 +2329,22 @@ class ControlApp:
             ),
             "mobile": (
                 f"{summary['mobile_online']}/{summary['mobile_total']}",
-                "至少有一台手机在线" if summary["mobile_online"] > 0 else "当前没有手机在线",
+                "At least one phone is online" if summary["mobile_online"] > 0 else "No phone is currently online",
                 "success" if summary["mobile_online"] > 0 else "error",
             ),
             "whitelist": (
-                f"{summary['approved_devices']} 台",
+                f"{summary['approved_devices']} devices",
                 f"keys {summary['approved_devices_with_keys']} | legacy {summary['approved_devices_without_keys']}",
                 "success" if summary["approved_devices_without_keys"] == 0 and summary["approved_devices"] > 0 else "warning",
             ),
             "approvals": (
-                f"{summary['pending_approvals']} 条",
+                f"{summary['pending_approvals']} waiting",
                 f"new {summary['pending_new_device_approvals']} | legacy {summary['pending_legacy_key_upgrades']} | rotate {summary['pending_device_key_rotations']}",
                 "warning" if summary["pending_approvals"] > 0 else "success",
             ),
             "activity": (
-                f"{summary['recent_phone_requests']} 条",
-                f"WebSocket {summary['recent_phone_websockets']} | {'最近有活跃访问' if summary['recent_phone_activity'] else '最近无活跃访问'}",
+                f"{summary['recent_phone_requests']} requests",
+                f"WebSocket {summary['recent_phone_websockets']} | {'recently active' if summary['recent_phone_activity'] else 'no recent activity'}",
                 "success" if summary["recent_phone_activity"] else "error",
             ),
         }
@@ -2659,63 +2356,56 @@ class ControlApp:
             for child in widgets["frame"].winfo_children():
                 child.configure(bg=background)
             widgets["detail"].configure(text=detail, bg=background)
-
         for labels, block in zip(self.block_labels, status["blocks"], strict=False):
             frame_color, text_color, _ = self._level_theme(block.get("level", "error"))
             labels["frame"].configure(bg=frame_color)
             labels["title"].configure(text=block["label"], bg=frame_color)
             labels["state"].configure(text=block["headline"], fg=text_color, bg=frame_color)
             labels["detail"].configure(text=block["detail"], bg=frame_color)
-
         devices_lines = []
         for peer in status["mobile_peers"]:
             devices_lines.append(
                 f"{peer['display_name']}\n"
-                f"  系统：{peer['os']}\n"
-                f"  在线：{'是' if peer['online'] else '否'}\n"
-                f"  活跃：{'是' if peer['active'] else '否'}\n"
-                f"  Tail IP：{peer['tail_ip'] or '暂无'}\n"
-                f"  最近握手：{format_datetime(peer['last_handshake'])}\n"
-                f"  最近出现：{format_datetime(peer['last_seen'])}\n"
-                f"  中继区域：{peer['relay'] or '暂无'}\n"
+                f"  OS: {peer['os']}\n"
+                f"  Online: {'yes' if peer['online'] else 'no'}\n"
+                f"  Active: {'yes' if peer['active'] else 'no'}\n"
+                f"  Tail IP: {peer['tail_ip'] or 'n/a'}\n"
+                f"  Last handshake: {format_datetime(peer['last_handshake'])}\n"
+                f"  Last seen: {format_datetime(peer['last_seen'])}\n"
+                f"  Relay region: {peer['relay'] or 'n/a'}\n"
             )
-        self._render_text(self.devices_text, "\n".join(devices_lines) if devices_lines else "暂未检测到手机设备。")
-
+        self._render_text(self.devices_text, "\n".join(devices_lines) if devices_lines else "No mobile device detected yet.")
         whitelist_lines = []
         for item in status["approved_devices"]:
             whitelist_lines.append(
                 f"{item['display_name']}\n"
-                f"  账号：{item.get('username') or '未知'}\n"
-                f"  设备 ID：{item.get('device_id') or '暂无'}\n"
-                f"  平台：{item.get('platform') or '暂无'}\n"
-                f"  类型：{item.get('app_type') or '暂无'}\n"
-                f"  设备密钥：{'已登记' if item.get('has_device_key') else '未登记'}\n"
-                f"  密钥登记时间：{format_datetime(item.get('key_registered_at'))}\n"
-                f"  首次批准：{format_datetime(item.get('first_approved_at'))}\n"
-                f"  最近登录：{format_datetime(item.get('last_login'))}\n"
-                f"  最近来源 IP：{item.get('last_ip') or '暂无'}\n"
+                f"  Account: {item.get('username') or 'unknown'}\n"
+                f"  Device ID: {item.get('device_id') or 'n/a'}\n"
+                f"  Platform: {item.get('platform') or 'n/a'}\n"
+                f"  Type: {item.get('app_type') or 'n/a'}\n"
+                f"  Device key: {'registered' if item.get('has_device_key') else 'missing'}\n"
+                f"  Key registered at: {format_datetime(item.get('key_registered_at'))}\n"
+                f"  First approved at: {format_datetime(item.get('first_approved_at'))}\n"
+                f"  Last login: {format_datetime(item.get('last_login'))}\n"
+                f"  Last source IP: {item.get('last_ip') or 'n/a'}\n"
             )
-        self._render_text(self.whitelist_text, "\n".join(whitelist_lines) if whitelist_lines else "当前设备白名单为空。")
-
+        self._render_text(self.whitelist_text, "\n".join(whitelist_lines) if whitelist_lines else "The trusted device list is empty.")
         request_lines = []
         for item in status["recent_mobile_requests"]:
             request_lines.append(
-                f"{format_datetime(item['time'])}（{format_age_text(item['time'])}）\n"
-                f"  请求：{item['method']} {item['path']}\n"
-                f"  状态码：{item['status']}  来源 IP：{item['ip']}\n"
-                f"  UA：{item['user_agent']}\n"
+                f"{format_datetime(item['time'])} ({format_age_text(item['time'])})\n"
+                f"  Request: {item['method']} {item['path']}\n"
+                f"  Status: {item['status']}  Source IP: {item['ip']}\n"
+                f"  UA: {item['user_agent']}\n"
             )
-        self._render_text(self.requests_text, "\n".join(request_lines) if request_lines else "最近没有检测到手机访问。")
-        self._render_text(self.diagnostics_text, "\n".join(status["diagnostics"]) if status["diagnostics"] else "最近没有诊断告警。")
+        self._render_text(self.requests_text, "\n".join(request_lines) if request_lines else "No recent phone requests were detected.")
+        self._render_text(self.diagnostics_text, "\n".join(status["diagnostics"]) if status["diagnostics"] else "No recent diagnostics warnings.")
         self._render_pending_approval_list(status["pending_device_approvals"])
-
     def run(self) -> None:
         self.root.mainloop()
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description="移动 Codex 本地控制工具")
-    parser.add_argument("--json", action="store_true", help="输出当前状态 JSON 后退出")
+    parser = argparse.ArgumentParser(description="Mobile Codex local control tool")
+    parser.add_argument("--json", action="store_true", help="Print the current status as JSON and exit")
     parser.add_argument(
         "--action",
         choices=[
@@ -2729,9 +2419,9 @@ def main() -> int:
             "disable_desktop_approvals",
             "open_local",
         ],
-        help="执行一次控制操作后退出",
+        help="Run one control action and then exit",
     )
-    parser.add_argument("--show-sensitive", action="store_true", help="在 JSON 输出中显示敏感字段，并附带危险提示。")
+    parser.add_argument("--show-sensitive", action="store_true", help="Show sensitive fields in JSON output and include a danger warning")
     args = parser.parse_args()
 
     if args.action:
@@ -2746,7 +2436,7 @@ def main() -> int:
         return 0
 
     if tk is None:
-        print("当前 Python 安装缺少 tkinter，无法启动图形界面。", file=sys.stderr)
+        print("The current Python installation is missing tkinter, so the desktop UI cannot be started.", file=sys.stderr)
         return 1
 
     app = ControlApp()
