@@ -19,6 +19,26 @@ Keep Codex local to your own Windows PC, put nginx in front of it, and let the p
 
 Legacy direct bindings are treated as migration state only. They are outside the default boundary and no longer part of the recommended public route.
 
+## Boundary Configuration Source
+
+`.runtime/mode-config.json` is the local boundary configuration source.
+
+It stores:
+
+- `requestedMode`
+- `effectiveMode`
+- `persistentRemotePublish`
+- confirmation metadata
+- legacy boundary detection state
+
+Normal installation and mode changes should go through `scripts/install-mobile-codex.ps1`, which is the controlled entrypoint that writes this file.
+
+Read-only operational inspection should go through:
+
+- `scripts/status-mobile-codex.ps1`
+- `scripts/doctor-mobile-codex.ps1`
+- `scripts/export-mobile-codex-support-bundle.ps1`
+
 ## Runtime Shape
 
 ```text

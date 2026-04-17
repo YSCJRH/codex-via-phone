@@ -45,54 +45,56 @@ Phone browser
 - Prefer `tailnet-private` over `public-funnel`
 - Require desktop approval for every first-time device
 - Keep hardened mode enabled by default
+- Treat `.runtime/mode-config.json` as the boundary configuration source
 
 ## Quick Start
 
 1. Obtain upstream `siteboon/claudecodeui` `v1.25.2`
 2. Place it at `vendor/claudecodeui-1.25.2`
-3. Apply this repository's override layer:
+3. Preview the install plan:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/apply-upstream-overrides.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -DryRun -EmitPlanJson
 ```
 
-4. Install upstream dependencies:
+4. Run the real localhost install:
 
 ```powershell
-cd vendor/claudecodeui-1.25.2
-npm install
-cd ..\..
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -EmitRedactedStatus
 ```
 
-5. Start the local stack:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
-```
-
-6. Launch the desktop control tool:
+5. Launch the desktop control tool if you want the Windows control panel:
 
 ```powershell
 python mobile_codex_control.py
 ```
 
-7. Open the local app in a desktop browser:
+6. Open the local app in a desktop browser:
 
 ```text
 http://127.0.0.1:3001
 ```
 
-8. Only if you explicitly want phone access, choose one access mode:
+7. Only if you explicitly want phone access, choose one access mode:
 
 ```powershell
 # Recommended: tailnet-private HTTPS mode
-powershell -ExecutionPolicy Bypass -File scripts/enable-mobile-codex-tailnet-private.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode tailnet-private -EmitRedactedStatus
 
 # Dangerous: public-funnel public internet entrypoint
-powershell -ExecutionPolicy Bypass -File scripts/publish-mobile-codex-public-funnel.ps1 -Yes
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode public-funnel -Yes -EmitRedactedStatus
 ```
 
-9. Log in from the phone for the first time and approve the device on the desktop.
+8. Log in from the phone for the first time and approve the device on the desktop.
+
+## Read-Only Ops Scripts
+
+- `scripts/status-mobile-codex.ps1`
+  Read-only redacted status output
+- `scripts/doctor-mobile-codex.ps1`
+  Read-only environment and boundary checks
+- `scripts/export-mobile-codex-support-bundle.ps1`
+  Redacted support bundle export for troubleshooting
 
 ## Documentation
 

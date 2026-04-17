@@ -26,6 +26,23 @@ If you change that into public exposure, multi-user sharing, or approval-free lo
 
 Legacy direct bindings are outside the default boundary and are kept only for migration detection.
 
+## Boundary Changes Must Be Explicit
+
+Boundary changes should be persisted in `.runtime/mode-config.json`.
+
+Use `scripts/install-mobile-codex.ps1` as the normal boundary-changing entrypoint so that:
+
+- mode selection is explicit
+- public-funnel confirmation is explicit
+- persistence intent is explicit
+- legacy direct state can be blocked instead of silently preserved
+
+Read-only inspection and support export should go through scripts that are redacted by default:
+
+- `scripts/status-mobile-codex.ps1`
+- `scripts/doctor-mobile-codex.ps1`
+- `scripts/export-mobile-codex-support-bundle.ps1`
+
 ## Prohibited Defaults
 
 The following must not become defaults in docs, scripts, or shipped config:

@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lib\mobile-codex-common.ps1')
 
 $workspace = Split-Path -Parent $PSScriptRoot
 $powershellExe = Join-Path $PSHOME 'powershell.exe'
@@ -24,7 +25,7 @@ function Get-DefaultAutoStartConfig {
     enabled = $true
     startupDelaySeconds = 45
     watchdogIntervalMinutes = 5
-    ensureRemotePublish = $false
+    ensureRemotePublish = (Get-MobileCodexPersistentRemotePublishDefault)
     restartCooldownSeconds = 120
     preserveKnownPublicBinding = $false
   }

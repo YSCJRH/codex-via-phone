@@ -4,6 +4,23 @@
 
 这份文档面向第一次部署的人。目标是把整套服务跑起来，先守住默认安全边界，再在你明确选择时扩展访问范围。
 
+## 推荐安装入口
+
+把 `scripts/install-mobile-codex.ps1` 作为唯一推荐安装入口。
+
+installer 固定按下面 8 个阶段执行：
+
+1. `validate-upstream`
+2. `apply-overrides`
+3. `install-deps`
+4. `doctor`
+5. `configure-mode`
+6. `start`
+7. `verify`
+8. `emit-redacted-status`
+
+installer 还会写入 `.runtime/mode-config.json`，它是请求模式和生效模式的边界配置源。
+
 ## 目标结果
 
 部署完成后，你应该能够：
@@ -55,26 +72,26 @@ codex-via-phone/
 vendor/claudecodeui-1.25.2
 ```
 
-## 第 2 步：应用覆盖层
+## 第 2 步：先预览安装计划
 
 在仓库根目录执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/apply-upstream-overrides.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -DryRun -EmitPlanJson
 ```
 
-如果你想先验证公开覆盖层是否完整，可以运行：
+## 第 3 步：执行 localhost 安装
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -EmitRedactedStatus
+```
+
+installer 会自动应用覆盖层、运行 `npm install`、检查运行环境、启动本地服务栈、验证 localhost 模式，并输出脱敏后的状态摘要。
+
+如果你想单独验证公开覆盖层是否完整，也可以运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/smoke-test-override-flow.ps1 -UpstreamZip <你的上游 zip 路径>
-```
-
-## 第 3 步：安装 Node 依赖
-
-```powershell
-cd vendor/claudecodeui-1.25.2
-npm install
-cd ..\..
 ```
 
 ## 第 4 步：可选的 Python 打包依赖
@@ -87,31 +104,7 @@ cd ..\..
 pip install -r requirements.txt
 ```
 
-## 第 5 步：检查本地环境
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
-```
-
-重点确认：
-
-- 上游目录存在
-- Node 可用
-- nginx 可用
-- 如果你要远程让手机访问，Tailscale 可用
-
-## 第 6 步：启动本地服务栈
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
-```
-
-默认会保持在 `localhost` 模式：
-
-- 应用服务：`127.0.0.1:3001`
-- nginx 代理：`127.0.0.1:8080`
-
-## 第 7 步：启动桌面控制工具
+## 第 5 步：启动桌面控制工具
 
 ```powershell
 python mobile_codex_control.py
@@ -132,7 +125,7 @@ scripts\launch-mobile-codex-control.cmd
 - 待审批设备
 - 已批准设备白名单
 
-## 第 8 步：完成首次注册
+## 第 6 步：完成首次注册
 
 在电脑浏览器打开：
 
@@ -142,7 +135,7 @@ http://127.0.0.1:3001
 
 这是单用户部署。第一个注册账号会成为这套系统的主账号。
 
-## 第 9 步：选择访问模式
+## 第 7 步：选择访问模式
 
 ### 方案 A：`localhost`
 
@@ -165,7 +158,7 @@ http://127.0.0.1:3001
 然后执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/enable-mobile-codex-tailnet-private.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode tailnet-private -EmitRedactedStatus
 ```
 
 预期结果：
@@ -181,7 +174,7 @@ powershell -ExecutionPolicy Bypass -File scripts/enable-mobile-codex-tailnet-pri
 只有在你明确需要公网 HTTPS 暴露并理解边界扩大时，才执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/publish-mobile-codex-public-funnel.ps1 -Yes
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode public-funnel -Yes -EmitRedactedStatus
 ```
 
 预期结果：
@@ -190,7 +183,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish-mobile-codex-public-fun
 - 输出里明确出现 `PUBLIC INTERNET ENTRYPOINT`
 - 应用本身仍然在本机 nginx 后面，而不是直接公网裸露
 
-## 第 10 步：首次设备审批
+## 第 8 步：首次设备审批
 
 当新设备第一次登录时：
 
@@ -201,6 +194,14 @@ powershell -ExecutionPolicy Bypass -File scripts/publish-mobile-codex-public-fun
 5. 手机继续完成登录流程
 
 不要跳过这一步。它属于默认信任边界的一部分。
+
+## 只读检查脚本
+
+如果你想做只读检查而不是切换边界，可以使用：
+
+- `powershell -ExecutionPolicy Bypass -File scripts/status-mobile-codex.ps1 -EmitJson`
+- `powershell -ExecutionPolicy Bypass -File scripts/doctor-mobile-codex.ps1 -EmitJson`
+- `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-support-bundle.ps1 -EmitJson`
 
 ## 可选环境变量
 

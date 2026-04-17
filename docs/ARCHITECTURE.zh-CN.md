@@ -19,6 +19,26 @@
 
 legacy direct 只作为迁移状态保留，已经不再属于默认边界，也不再是公开推荐路线。
 
+## 边界配置源
+
+`.runtime/mode-config.json` 是本地边界配置源。
+
+它保存：
+
+- `requestedMode`
+- `effectiveMode`
+- `persistentRemotePublish`
+- 确认元数据
+- legacy 边界检测状态
+
+正常安装和模式切换都应该通过 `scripts/install-mobile-codex.ps1` 这个受控入口来写入它。
+
+只读的运维检查则应通过下面这些脚本完成：
+
+- `scripts/status-mobile-codex.ps1`
+- `scripts/doctor-mobile-codex.ps1`
+- `scripts/export-mobile-codex-support-bundle.ps1`
+
 ## 运行时形态
 
 ```text

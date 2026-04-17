@@ -26,6 +26,23 @@
 
 legacy direct 已经不属于默认边界，只保留作迁移检测。
 
+## 边界变化必须显式记录
+
+边界变化应当持久化到 `.runtime/mode-config.json`。
+
+正常的边界切换应该通过 `scripts/install-mobile-codex.ps1` 这个受控入口完成，这样才能保证：
+
+- 模式选择是显式的
+- `public-funnel` 确认是显式的
+- 持久化意图是显式的
+- legacy direct 状态会被拦下，而不是被偷偷保留
+
+只读检查和支持包导出则应通过默认脱敏的脚本完成：
+
+- `scripts/status-mobile-codex.ps1`
+- `scripts/doctor-mobile-codex.ps1`
+- `scripts/export-mobile-codex-support-bundle.ps1`
+
 ## 禁止成为默认值的行为
 
 下面这些行为，不能在文档、脚本或默认配置里变成默认路线：

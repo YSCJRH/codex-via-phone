@@ -1187,19 +1187,25 @@ def coerce_positive_int(value: Any, default: int) -> int:
     return converted if converted > 0 else default
 
 
-def auto_start_defaults() -> dict[str, Any]:
+def auto_start_defaults(mode_config: dict[str, Any] | None = None) -> dict[str, Any]:
+    config_source = mode_config or load_mode_config()
+    persistent_public = (
+        normalize_mode_name(config_source.get("requestedMode")) == "public-funnel"
+        and bool(config_source.get("persistentRemotePublish"))
+    )
     return {
         "enabled": True,
         "startupDelaySeconds": 45,
         "watchdogIntervalMinutes": 5,
-        "ensureRemotePublish": False,
+        "ensureRemotePublish": persistent_public,
         "restartCooldownSeconds": 120,
         "preserveKnownPublicBinding": False,
     }
 
 
 def load_auto_start_metadata() -> dict[str, Any]:
-    defaults = auto_start_defaults()
+    mode_config = load_mode_config()
+    defaults = auto_start_defaults(mode_config)
     raw_config = read_json_object(AUTO_START_CONFIG_PATH)
     raw_state = read_json_object(AUTO_START_STATE_PATH)
 

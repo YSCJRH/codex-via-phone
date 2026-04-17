@@ -4,6 +4,23 @@
 
 This guide is written for first-time users. The goal is to get the stack running on a Windows PC, keep the safe default boundary, and only expand access when you explicitly choose to.
 
+## Recommended Installer Entry
+
+Use `scripts/install-mobile-codex.ps1` as the single recommended install entrypoint.
+
+The installer runs these phases in order:
+
+1. `validate-upstream`
+2. `apply-overrides`
+3. `install-deps`
+4. `doctor`
+5. `configure-mode`
+6. `start`
+7. `verify`
+8. `emit-redacted-status`
+
+It also writes `.runtime/mode-config.json`, which is the boundary configuration source for the requested and effective access mode.
+
 ## Expected Result
 
 After deployment, you should be able to:
@@ -55,26 +72,26 @@ Download upstream `siteboon/claudecodeui` `v1.25.2` and place it at:
 vendor/claudecodeui-1.25.2
 ```
 
-## Step 2: Apply the Override Layer
+## Step 2: Preview The Install Plan
 
 From the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/apply-upstream-overrides.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -DryRun -EmitPlanJson
 ```
 
-If you want to validate the published override set before a real install, run:
+## Step 3: Run The Localhost Install
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -EmitRedactedStatus
+```
+
+The installer applies overrides, runs `npm install`, checks the runtime, starts the local stack, verifies localhost mode, and emits a redacted status summary.
+
+If you want to validate the published override set separately before a real install, run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/smoke-test-override-flow.ps1 -UpstreamZip <path-to-upstream-zip>
-```
-
-## Step 3: Install Node Dependencies
-
-```powershell
-cd vendor/claudecodeui-1.25.2
-npm install
-cd ..\..
 ```
 
 ## Step 4: Optional Python Packaging Dependency
@@ -87,31 +104,7 @@ If you want to package the desktop tool as an `.exe`:
 pip install -r requirements.txt
 ```
 
-## Step 5: Check the Local Environment
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
-```
-
-Important checks:
-
-- upstream folder exists
-- Node is available
-- nginx is available
-- if you want remote phone access, Tailscale is available
-
-## Step 6: Start the Local Stack
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
-```
-
-By default this keeps the app in `localhost` mode:
-
-- app service on `127.0.0.1:3001`
-- nginx proxy on `127.0.0.1:8080`
-
-## Step 7: Launch the Desktop Control Tool
+## Step 5: Launch the Desktop Control Tool
 
 ```powershell
 python mobile_codex_control.py
@@ -132,7 +125,7 @@ You should see:
 - pending device approvals
 - trusted device whitelist
 
-## Step 8: Complete First Registration
+## Step 6: Complete First Registration
 
 Open this in a desktop browser:
 
@@ -142,7 +135,7 @@ http://127.0.0.1:3001
 
 This is a single-user setup. The first account becomes the main account for the system.
 
-## Step 9: Choose Access Mode
+## Step 7: Choose Access Mode
 
 ### Option A: `localhost`
 
@@ -165,7 +158,7 @@ Make sure:
 Then run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/enable-mobile-codex-tailnet-private.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode tailnet-private -EmitRedactedStatus
 ```
 
 Expected result:
@@ -181,7 +174,7 @@ Dangerous mode. This creates a public internet entrypoint.
 Only run this if you explicitly want public HTTPS exposure and understand the boundary expansion:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/publish-mobile-codex-public-funnel.ps1 -Yes
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode public-funnel -Yes -EmitRedactedStatus
 ```
 
 Expected result:
@@ -190,7 +183,7 @@ Expected result:
 - output clearly states `PUBLIC INTERNET ENTRYPOINT`
 - the app itself still stays behind local nginx
 
-## Step 10: First-Time Device Approval
+## Step 8: First-Time Device Approval
 
 When a new device logs in for the first time:
 
@@ -201,6 +194,14 @@ When a new device logs in for the first time:
 5. the phone continues the login flow
 
 Do not skip this. It is part of the default trust boundary.
+
+## Read-Only Inspection Scripts
+
+Use these scripts when you want read-only inspection instead of a boundary change:
+
+- `powershell -ExecutionPolicy Bypass -File scripts/status-mobile-codex.ps1 -EmitJson`
+- `powershell -ExecutionPolicy Bypass -File scripts/doctor-mobile-codex.ps1 -EmitJson`
+- `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-support-bundle.ps1 -EmitJson`
 
 ## Optional Environment Variables
 

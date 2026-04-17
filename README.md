@@ -45,54 +45,56 @@
 - 如需远程访问，优先使用 `tailnet-private`
 - 每台新设备第一次登录都要桌面审批
 - 默认保持 hardened mode 开启
+- 把 `.runtime/mode-config.json` 视为边界配置源
 
 ## 快速开始
 
 1. 获取上游 `siteboon/claudecodeui` `v1.25.2`
 2. 放到 `vendor/claudecodeui-1.25.2`
-3. 应用本仓的覆盖层：
+3. 先预览安装计划：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/apply-upstream-overrides.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -DryRun -EmitPlanJson
 ```
 
-4. 安装上游依赖：
+4. 再执行真实的 localhost 安装：
 
 ```powershell
-cd vendor/claudecodeui-1.25.2
-npm install
-cd ..\..
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode localhost -EmitRedactedStatus
 ```
 
-5. 启动本地服务栈：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
-```
-
-6. 启动桌面控制工具：
+5. 如果你需要 Windows 控制面板，再启动桌面工具：
 
 ```powershell
 python mobile_codex_control.py
 ```
 
-7. 在电脑浏览器打开本地页面：
+6. 在电脑浏览器打开本地页面：
 
 ```text
 http://127.0.0.1:3001
 ```
 
-8. 只有在你明确要让手机接入时，再选择一种访问模式：
+7. 只有在你明确要让手机接入时，再选择一种访问模式：
 
 ```powershell
 # 推荐：tailnet-private HTTPS 模式
-powershell -ExecutionPolicy Bypass -File scripts/enable-mobile-codex-tailnet-private.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode tailnet-private -EmitRedactedStatus
 
 # 危险：public-funnel 公网 HTTPS 入口
-powershell -ExecutionPolicy Bypass -File scripts/publish-mobile-codex-public-funnel.ps1 -Yes
+powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode public-funnel -Yes -EmitRedactedStatus
 ```
 
-9. 用手机首次登录，并在桌面端批准该设备。
+8. 用手机首次登录，并在桌面端批准该设备。
+
+## 只读运维脚本
+
+- `scripts/status-mobile-codex.ps1`
+  只读的脱敏状态输出
+- `scripts/doctor-mobile-codex.ps1`
+  只读的环境与边界体检
+- `scripts/export-mobile-codex-support-bundle.ps1`
+  默认脱敏的支持包导出
 
 ## 文档
 

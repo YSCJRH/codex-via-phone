@@ -16,6 +16,109 @@ function Get-MobileCodexBindingPath {
   return Join-Path (Get-MobileCodexRuntimeDir) 'app-binding.json'
 }
 
+function Resolve-MobileCodexUpstreamDir {
+  if ($env:MOBILE_CODEX_UPSTREAM_DIR) {
+    return $env:MOBILE_CODEX_UPSTREAM_DIR
+  }
+
+  return Join-Path (Get-MobileCodexWorkspace) 'vendor\claudecodeui-1.25.2'
+}
+
+function Resolve-MobileCodexCommandPath {
+  param(
+    $Command
+  )
+
+  if (-not $Command) {
+    return $null
+  }
+
+  if ($Command.PSObject.Properties['Path']) {
+    return $Command.Path
+  }
+
+  if ($Command.PSObject.Properties['FullName']) {
+    return $Command.FullName
+  }
+
+  return $null
+}
+
+function Resolve-MobileCodexNodeCommand {
+  if ($env:MOBILE_CODEX_NODE -and (Test-Path $env:MOBILE_CODEX_NODE)) {
+    return Get-Item $env:MOBILE_CODEX_NODE -ErrorAction Stop
+  }
+
+  return Get-Command node -ErrorAction SilentlyContinue
+}
+
+function Resolve-MobileCodexPythonCommand {
+  return Get-Command python -ErrorAction SilentlyContinue
+}
+
+function Resolve-MobileCodexNpmCommand {
+  return Get-Command npm -ErrorAction SilentlyContinue
+}
+
+function Resolve-MobileCodexNginxCommand {
+  if ($env:MOBILE_CODEX_NGINX -and (Test-Path $env:MOBILE_CODEX_NGINX)) {
+    return Get-Item $env:MOBILE_CODEX_NGINX -ErrorAction Stop
+  }
+
+  $found = Get-Command nginx -ErrorAction SilentlyContinue
+  if ($found) {
+    return $found
+  }
+
+  $wingetRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+  $wingetPackage = Get-ChildItem -Path $wingetRoot -Directory -Filter 'nginxinc.nginx*' -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+  if ($wingetPackage) {
+    $wingetVersionDir = Get-ChildItem -Path $wingetPackage.FullName -Directory -Filter 'nginx-*' -ErrorAction SilentlyContinue |
+      Sort-Object Name -Descending |
+      Select-Object -First 1
+    if ($wingetVersionDir) {
+      $candidate = Join-Path $wingetVersionDir.FullName 'nginx.exe'
+      if (Test-Path $candidate) {
+        return Get-Item $candidate -ErrorAction Stop
+      }
+    }
+  }
+
+  foreach ($candidate in @(
+    'C:\Program Files\nginx\nginx.exe',
+    'C:\nginx\nginx.exe'
+  )) {
+    if (Test-Path $candidate) {
+      return Get-Item $candidate -ErrorAction Stop
+    }
+  }
+
+  return $null
+}
+
+function Get-MobileCodexRuntimeSummary {
+  $workspace = Get-MobileCodexWorkspace
+  $upstream = Resolve-MobileCodexUpstreamDir
+  $nodeCommand = Resolve-MobileCodexNodeCommand
+  $npmCommand = Resolve-MobileCodexNpmCommand
+  $nginxCommand = Resolve-MobileCodexNginxCommand
+  $pythonCommand = Resolve-MobileCodexPythonCommand
+  $tailscaleCommand = Resolve-MobileCodexTailscaleCommand
+
+  return [ordered]@{
+    Workspace = $workspace
+    UpstreamExists = (Test-Path $upstream)
+    UpstreamPath = $upstream
+    Node = Resolve-MobileCodexCommandPath $nodeCommand
+    Npm = Resolve-MobileCodexCommandPath $npmCommand
+    Nginx = Resolve-MobileCodexCommandPath $nginxCommand
+    Tailscale = $tailscaleCommand
+    Python = Resolve-MobileCodexCommandPath $pythonCommand
+  }
+}
+
 function Read-MobileCodexJsonObject {
   param(
     [Parameter(Mandatory = $true)]
@@ -146,6 +249,31 @@ function Get-MobileCodexModeConfig {
   }
 }
 
+function Get-MobileCodexPersistentRemotePublishDefault {
+  $modeConfig = Get-MobileCodexModeConfig
+  return (
+    [string]$modeConfig.requestedMode -eq 'public-funnel' -and
+    [bool]$modeConfig.persistentRemotePublish
+  )
+}
+
+function Reset-MobileCodexPublishedEntrypoints {
+  $tailscale = Resolve-MobileCodexTailscaleCommand
+  if (-not $tailscale) {
+    return
+  }
+
+  try {
+    & $tailscale funnel reset 2>$null | Out-Null
+  } catch {
+  }
+
+  try {
+    & $tailscale serve reset 2>$null | Out-Null
+  } catch {
+  }
+}
+
 function Save-MobileCodexModeConfig {
   param(
     [Parameter(Mandatory = $true)]
@@ -255,8 +383,9 @@ function Update-MobileCodexBindingMode {
       $binding.requiresTailscaleClient = $false
     }
     'tailnet-private' {
-      $binding.url = if ($PreferredUrl) { $PreferredUrl } else { $binding.url }
-      $binding.preferredUrl = if ($PreferredUrl) { $PreferredUrl } else { $binding.preferredUrl }
+      $targetUrl = if ($PreferredUrl) { $PreferredUrl } else { 'http://127.0.0.1:3001' }
+      $binding.url = $targetUrl
+      $binding.preferredUrl = $targetUrl
       $binding.directUrl = 'http://127.0.0.1:3001'
       $binding.serveUrl = $PublishedUrl
       $binding.funnelUrl = $null
@@ -264,8 +393,9 @@ function Update-MobileCodexBindingMode {
       $binding.requiresTailscaleClient = $true
     }
     'public-funnel' {
-      $binding.url = if ($PreferredUrl) { $PreferredUrl } else { $binding.url }
-      $binding.preferredUrl = if ($PreferredUrl) { $PreferredUrl } else { $binding.preferredUrl }
+      $targetUrl = if ($PreferredUrl) { $PreferredUrl } else { 'http://127.0.0.1:3001' }
+      $binding.url = $targetUrl
+      $binding.preferredUrl = $targetUrl
       $binding.directUrl = 'http://127.0.0.1:3001'
       $binding.serveUrl = $null
       $binding.funnelUrl = $PublishedUrl
