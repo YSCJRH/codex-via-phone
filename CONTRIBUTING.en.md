@@ -25,6 +25,7 @@ Before contributing, review:
 - mixing unrelated tools from the broader private workspace into this repository
 - making public exposure the default path
 - loosening auth, trusted-device approval, or hardened-mode assumptions without a review
+- putting maintainer-only release steps, deploy key details, or one-off ops instructions into public-facing entry docs
 - committing upstream snapshots, runtime data, logs, databases, binaries, or personal deployment artifacts
 
 ## Privacy-safe issue and PR guidance
@@ -45,6 +46,7 @@ Please do at least the following:
 3. if you changed the override layer, run `scripts/smoke-test-override-flow.ps1`
 4. if you changed the desktop tool, run `python -m py_compile mobile_codex_control.py`
 5. if you changed docs, keep Chinese and English entry points aligned
+6. if you are preparing a public release as a maintainer, run those checks in the sanitized staging copy rather than pushing a live private working tree
 
 ## Pull request guidance
 

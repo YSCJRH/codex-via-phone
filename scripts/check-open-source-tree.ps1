@@ -1,7 +1,7 @@
 $workspace = Split-Path -Parent $PSScriptRoot
 $errors = @()
 
-$blockedDirs = @('vendor', 'node_modules', 'dist', 'build', '.runtime', 'tmp', '__pycache__')
+$blockedDirs = @('vendor', 'node_modules', 'dist', 'build', '.runtime', 'tmp', '__pycache__', '.npm-cache', 'private-docs')
 foreach ($dir in $blockedDirs) {
   if (Test-Path (Join-Path $workspace $dir)) {
     $errors += "Blocked directory present: $dir"
@@ -39,16 +39,21 @@ function Get-ReviewFiles {
 
 $blockedExtensions = @(
   '.db', '.log', '.sqlite', '.sqlite3', '.exe', '.pyc',
-  '.jsonl', '.zip', '.7z', '.rar', '.pem', '.crt', '.key', '.p12', '.pfx'
+  '.jsonl', '.tar', '.gz', '.tgz', '.zip', '.7z', '.rar', '.pem', '.crt', '.key', '.p12', '.pfx'
 )
-$blockedFileNames = @('.env')
+$blockedFileNames = @('.env', 'known_hosts')
+$blockedFileNamePatterns = @(
+  '^known_hosts\..+$'
+)
 
 $reviewFiles = Get-ReviewFiles -Root $workspace
 
 $blockedFiles = $reviewFiles | Where-Object {
+  $fileName = $_.Name
   $_.FullName -notmatch '\\upstream-overrides\\' -and (
     $blockedExtensions -contains $_.Extension.ToLowerInvariant() -or
-    $blockedFileNames -contains $_.Name
+    $blockedFileNames -contains $fileName -or
+    @($blockedFileNamePatterns | Where-Object { $fileName -match $_ }).Count -gt 0
   )
 }
 foreach ($file in $blockedFiles) {
@@ -57,11 +62,18 @@ foreach ($file in $blockedFiles) {
 
 $selfPath = Join-Path $workspace 'scripts\check-open-source-tree.ps1'
 $searchableExtensions = @('.md', '.txt', '.ps1', '.cmd', '.py', '.js', '.ts', '.tsx', '.jsx', '.json', '.example', '.conf')
-$sensitivePattern = 'BEGIN PRIVATE KEY|BEGIN OPENSSH PRIVATE KEY|BEGIN RSA PRIVATE KEY|BEGIN EC PRIVATE KEY'
+$sensitivePatterns = @(
+  'BEGIN PRIVATE KEY',
+  'BEGIN OPENSSH PRIVATE KEY',
+  'BEGIN RSA PRIVATE KEY',
+  'BEGIN EC PRIVATE KEY',
+  '[A-Za-z]:\\Users\\[^\\/\r\n]+',
+  '\b[a-z0-9-]+\.[a-z0-9-]+\.ts\.net\b'
+)
 $textHits = $reviewFiles | Where-Object {
   $_.FullName -ne $selfPath -and
   $searchableExtensions -contains $_.Extension.ToLowerInvariant()
-} | Select-String -Pattern $sensitivePattern
+} | Select-String -Pattern $sensitivePatterns
 foreach ($hit in $textHits) {
   $errors += "Sensitive text pattern found in $($hit.Path):$($hit.LineNumber)"
 }

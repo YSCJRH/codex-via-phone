@@ -21,6 +21,47 @@ If you want the security boundary, architecture, or release rules, use the docum
 - Approve the first login of a new mobile device from the desktop
 - Monitor local service health, remote publish state, and device approvals from the Windows desktop control tool
 
+## What it is not
+
+- It is not a remote desktop or a full remote IDE
+- It is not a multi-user SaaS or shared Codex platform
+- It is not a bundle of the broader private workspace's experiments, audits, registration flow, or ops assets
+- It is not intended to make direct public exposure of the Node app the default path
+
+## Recommended architecture
+
+```text
+Phone browser
+  -> Private HTTPS entrypoint (for example Tailscale)
+  -> Local reverse proxy
+  -> Local claudecodeui with this repository's override layer
+  -> Local Codex sessions on the PC
+```
+
+## Safe default model
+
+- Keep the app bound to `127.0.0.1`
+- Put a reverse proxy in front of it
+- Prefer a private-network entrypoint
+- Require desktop approval for every first-time device
+- Keep hardened mode enabled by default
+
+## Repository boundary
+
+Public-facing releases should contain only the minimum reusable materials from this project:
+
+- the override layer
+- the helper scripts
+- the desktop control tool source
+- the documentation needed for deployment, security, contribution, and release review
+
+Do not mix in sibling private projects from the parent workspace, maintainer-only notes, runtime evidence, certificate material, or full upstream snapshots.
+
+If you plan to publish a fork, review:
+
+- [docs/PRIVATE_LOCAL_ONLY.md](docs/PRIVATE_LOCAL_ONLY.md)
+- [docs/OPEN_SOURCE_RELEASE_CHECKLIST.md](docs/OPEN_SOURCE_RELEASE_CHECKLIST.md)
+
 ## Quick start
 
 ### What you need
@@ -79,6 +120,9 @@ http://127.0.0.1:3001
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Security policy: [SECURITY.md](SECURITY.md)
 - Contributing: [CONTRIBUTING.en.md](CONTRIBUTING.en.md)
+- Private-local-only exclusions: [docs/PRIVATE_LOCAL_ONLY.md](docs/PRIVATE_LOCAL_ONLY.md)
+- Open-source release checklist: [docs/OPEN_SOURCE_RELEASE_CHECKLIST.md](docs/OPEN_SOURCE_RELEASE_CHECKLIST.md)
+- Repository entrypoint for Codex and similar coding assistants: [AGENTS.md](AGENTS.md)
 
 ## Acknowledgements
 

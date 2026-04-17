@@ -7,8 +7,11 @@ import {
   sortCodexProjectsForDisplay,
 } from './project-path-rules.js';
 
-const WINDOWS_HOME = 'C:\\Users\\34793';
-const PYTEST_PROJECT = 'C:\\Users\\34793\\AppData\\Local\\Temp\\pytest-of-34793\\pytest-92\\test_run\\project';
+const WINDOWS_HOME = 'C:\\Users\\example-user';
+const PYTEST_PROJECT = 'C:\\Users\\example-user\\AppData\\Local\\Temp\\pytest-of-example-user\\pytest-92\\test_run\\project';
+const PRIMARY_WORKSPACE = 'D:\\workspaces\\mobile helper';
+const SECONDARY_WORKSPACE = 'D:\\workspaces\\sample project';
+const SECONDARY_WORKSPACE_LONG = '\\\\?\\D:\\workspaces\\sample project';
 
 test('shouldHideAutoDetectedProject hides system, home, and temp-like paths', () => {
   assert.equal(
@@ -31,15 +34,15 @@ test('shouldHideAutoDetectedProject hides system, home, and temp-like paths', ()
 
 test('shouldHideAutoDetectedProject keeps real workspaces visible and allows manual overrides', () => {
   assert.equal(
-    shouldHideAutoDetectedProject('D:\\remote connection', { homeDir: WINDOWS_HOME }),
+    shouldHideAutoDetectedProject(PRIMARY_WORKSPACE, { homeDir: WINDOWS_HOME }),
     false,
   );
   assert.equal(
-    shouldHideAutoDetectedProject('D:\\skylattice', { homeDir: WINDOWS_HOME }),
+    shouldHideAutoDetectedProject(SECONDARY_WORKSPACE, { homeDir: WINDOWS_HOME }),
     false,
   );
   assert.equal(
-    shouldHideAutoDetectedProject('\\\\?\\D:\\skylattice', { homeDir: WINDOWS_HOME }),
+    shouldHideAutoDetectedProject(SECONDARY_WORKSPACE_LONG, { homeDir: WINDOWS_HOME }),
     false,
   );
   assert.equal(
@@ -52,29 +55,29 @@ test('shouldHideAutoDetectedProject keeps real workspaces visible and allows man
 });
 
 test('getProjectPathDisplayName returns the final path segment for Windows paths', () => {
-  assert.equal(getProjectPathDisplayName('D:\\remote connection'), 'remote connection');
-  assert.equal(getProjectPathDisplayName('D:\\remote connection\\repo_audit'), 'repo_audit');
+  assert.equal(getProjectPathDisplayName(PRIMARY_WORKSPACE), 'mobile helper');
+  assert.equal(getProjectPathDisplayName('D:\\workspaces\\mobile helper\\nested project'), 'nested project');
   assert.equal(getProjectPathDisplayName('D:\\中文项目'), '中文项目');
-  assert.equal(getProjectPathDisplayName('\\\\?\\D:\\skylattice'), 'skylattice');
+  assert.equal(getProjectPathDisplayName(SECONDARY_WORKSPACE_LONG), 'sample project');
 });
 
 test('indexCodexSessionsByProjectPath merges long-path variants and keeps latest session duplicates', () => {
   const sessionsByProject = indexCodexSessionsByProjectPath([
     {
       id: 'same-session',
-      cwd: 'D:\\skylattice',
+      cwd: SECONDARY_WORKSPACE,
       lastActivity: '2026-04-09T01:00:00.000Z',
       summary: 'older variant',
     },
     {
       id: 'same-session',
-      cwd: '\\\\?\\D:\\skylattice',
+      cwd: SECONDARY_WORKSPACE_LONG,
       lastActivity: '2026-04-09T02:00:00.000Z',
       summary: 'newer variant',
     },
     {
       id: 'other-session',
-      cwd: '\\\\?\\D:\\skylattice',
+      cwd: SECONDARY_WORKSPACE_LONG,
       lastActivity: '2026-04-09T03:00:00.000Z',
       summary: 'another session',
     },
@@ -82,24 +85,24 @@ test('indexCodexSessionsByProjectPath merges long-path variants and keeps latest
 
   assert.equal(sessionsByProject.size, 1);
 
-  const skylatticeSessions = [...sessionsByProject.values()][0];
-  assert.equal(skylatticeSessions.length, 2);
-  assert.equal(skylatticeSessions[0].id, 'other-session');
-  assert.equal(skylatticeSessions[1].id, 'same-session');
-  assert.equal(skylatticeSessions[1].summary, 'newer variant');
-  assert.equal(skylatticeSessions[1].cwd, 'D:\\skylattice');
+  const sampleProjectSessions = [...sessionsByProject.values()][0];
+  assert.equal(sampleProjectSessions.length, 2);
+  assert.equal(sampleProjectSessions[0].id, 'other-session');
+  assert.equal(sampleProjectSessions[1].id, 'same-session');
+  assert.equal(sampleProjectSessions[1].summary, 'newer variant');
+  assert.equal(sampleProjectSessions[1].cwd, SECONDARY_WORKSPACE);
 });
 
 test('sortCodexProjectsForDisplay preserves only visible projects and orders by recent activity', () => {
   const sessionsByProject = indexCodexSessionsByProjectPath([
     {
       id: 'remote-1',
-      cwd: 'D:\\remote connection',
+      cwd: PRIMARY_WORKSPACE,
       lastActivity: '2026-04-09T05:00:00.000Z',
     },
     {
       id: 'sky-1',
-      cwd: '\\\\?\\D:\\skylattice',
+      cwd: SECONDARY_WORKSPACE_LONG,
       lastActivity: '2026-04-09T06:00:00.000Z',
     },
     {
@@ -121,6 +124,6 @@ test('sortCodexProjectsForDisplay preserves only visible projects and orders by 
 
   assert.deepEqual(
     sortedProjects.map((project) => project.displayName),
-    ['skylattice', 'remote connection'],
+    ['sample project', 'mobile helper'],
   );
 });

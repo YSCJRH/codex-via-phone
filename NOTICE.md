@@ -2,7 +2,7 @@
 
 [中文](NOTICE.zh-CN.md) | [English](NOTICE.md)
 
-This repository is a focused helper layer, not a full replacement for upstream.
+This repository is a focused helper layer, not a full replacement for upstream and not a bundle of a broader private workspace.
 
 Its public scope is intentionally narrow:
 
@@ -22,6 +22,8 @@ The intended flow is:
 2. apply this repository's override layer
 3. follow the deployment and security guides in this repository
 
+Public-facing releases should keep only the minimum reusable materials: the override layer, helper scripts, desktop control tool source, and the docs required for deployment, security, contribution, and release review.
+
 This repository should not be published together with private-local artifacts such as:
 
 - personal databases
@@ -29,6 +31,8 @@ This repository should not be published together with private-local artifacts su
 - diagnostics bundles
 - certificates or private keys
 - packaged binaries
+- maintainer-only notes or one-off release materials
+- sibling private projects or other parent-workspace assets
 - full upstream source snapshots outside the minimum override set
 - real hostnames, private IPs, approval traces, or device evidence
 

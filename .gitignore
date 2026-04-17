@@ -10,11 +10,15 @@ __pycache__/
 tmp/
 build/
 dist/
+.npm-cache/
 *.log
 *.db
 *.sqlite
 *.sqlite3
 *.jsonl
+*.tar
+*.gz
+*.tgz
 *.zip
 *.7z
 *.rar
@@ -27,6 +31,9 @@ dist/
 # Local environment files
 .env
 !.env.example
+_tmp_check_mobile_codex_state.mjs
+known_hosts
+known_hosts.*
 
 # Node install cache
 node_modules/

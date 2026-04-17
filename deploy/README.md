@@ -1,6 +1,6 @@
 # Deploy Templates
 
-The `deploy/` directory contains reusable reverse-proxy templates for this project.
+The `deploy/` directory is part of the public-safe surface of this project. It should contain reusable reverse-proxy templates only, not personalized deployment records.
 
 ## Files in this directory
 
@@ -19,6 +19,8 @@ When publishing the repository or sharing snippets:
 - keep real domains, private IPs, certificate paths, and usernames out of committed config
 - publish example values only
 - adapt live values locally after cloning
+- keep personalized copies of these templates outside the public release tree
+- do not copy maintainer-only deployment notes or one-off ops files into this directory
 
 ## Recommended deployment posture
 

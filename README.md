@@ -21,6 +21,47 @@
 - 在桌面端批准第一次登录的新手机
 - 在 Windows 桌面控制工具里查看本地服务、远程入口和设备审批状态
 
+## 它不是什么
+
+- 不是远程桌面，也不是完整远程 IDE
+- 不是多人 SaaS 或多人共享 Codex 平台
+- 不是把更大私有工作区里的实验、审计、注册或运维资产一起开源
+- 不是把 Node 应用直接暴露到公网的默认部署方案
+
+## 推荐架构
+
+```text
+手机浏览器
+  -> 私有 HTTPS 入口（例如 Tailscale）
+  -> 本机反向代理
+  -> 已应用本仓覆盖层的本地 claudecodeui
+  -> 电脑上的本地 Codex 会话
+```
+
+## 安全默认模型
+
+- 应用只监听 `127.0.0.1`
+- 前面放一层反向代理
+- 优先使用私网入口
+- 新设备首次登录必须经过桌面端批准
+- hardened mode 默认保持开启
+
+## 仓库边界
+
+公开发布只应该包含这个项目的最小可复用材料：
+
+- 覆盖层源码
+- 辅助脚本
+- 桌面控制工具源码
+- 部署、安全、贡献与发版审查所需文档
+
+不要把父目录中的其它私有项目、维护者内部说明、运行态证据、证书密钥或完整上游快照混进发布快照。
+
+如果你准备公开发布自己的 fork，请先阅读：
+
+- [docs/PRIVATE_LOCAL_ONLY.zh-CN.md](docs/PRIVATE_LOCAL_ONLY.zh-CN.md)
+- [docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md](docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md)
+
 ## 快速开始
 
 ### 你需要准备
@@ -79,6 +120,9 @@ http://127.0.0.1:3001
 - 架构说明：[docs/ARCHITECTURE.zh-CN.md](docs/ARCHITECTURE.zh-CN.md)
 - 安全策略：[SECURITY.zh-CN.md](SECURITY.zh-CN.md)
 - 贡献说明：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 私有本地内容排除清单：[docs/PRIVATE_LOCAL_ONLY.zh-CN.md](docs/PRIVATE_LOCAL_ONLY.zh-CN.md)
+- 开源发布检查清单：[docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md](docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md)
+- 给 Codex / 编程助手的仓库入口：[AGENTS.md](AGENTS.md)
 
 ## 致谢
 

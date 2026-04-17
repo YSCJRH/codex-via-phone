@@ -59,6 +59,8 @@
 - 证书和私钥
 - 运行日志与诊断导出
 - session JSONL 与审批证据
+- 维护者内部发布说明或一次性发布材料
+- 父目录工作区中的 sibling project 与其它私人资产
 - 从私人环境打包出来的二进制
 
 详见：
@@ -71,6 +73,8 @@
 
 - `scripts/check-open-source-tree.ps1`
 - `docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md`
+
+如果你是维护者，请在一份脱敏后的 staging 发布副本里运行这些检查，而不是把当前私有工作树直接当作可发布快照。
 
 如果旧版私有构建曾暴露过 query token、认证 secret 或设备绑定材料，请先在真实环境中完成轮换。
 

@@ -58,6 +58,8 @@ Never commit or publish:
 - certificates, private keys, or local TLS material
 - runtime logs and diagnostics exports
 - session JSONL files and approval evidence
+- maintainer-only release notes or one-off release materials
+- sibling private projects and other parent-workspace assets
 - packaged binaries built from your private environment
 
 See [docs/PRIVATE_LOCAL_ONLY.md](docs/PRIVATE_LOCAL_ONLY.md).
@@ -68,6 +70,8 @@ Before a public push, review:
 
 - `scripts/check-open-source-tree.ps1`
 - `docs/OPEN_SOURCE_RELEASE_CHECKLIST.md`
+
+If you are a maintainer, run those checks against a sanitized staging copy instead of treating a live private working tree as publish-ready.
 
 If an older private build ever exposed query tokens, auth secrets, or device-bound material, rotate the real secrets before publishing.
 

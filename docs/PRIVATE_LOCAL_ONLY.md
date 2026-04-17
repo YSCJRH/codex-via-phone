@@ -13,16 +13,21 @@ The public repository should contain only the minimum reusable materials needed 
 - the desktop control tool source
 - the documentation needed for deployment, security, contribution, and release review
 
+The public repository is not the broader private workspace and must not absorb sibling private projects, parent-level assets, or maintainer-only materials.
+
 ## Keep out of the public repository
 
 Do not publish:
 
 - runtime state such as `.runtime/`, `tmp/`, logs, databases, and diagnostics exports
 - the full upstream checkout in `vendor/`
+- local dependency caches and scratch files such as `.npm-cache/`
 - packaged binaries, local archives, and build leftovers
 - certificates, private keys, and personal TLS material
 - session JSONL files, approval traces, trusted-device evidence, and copied runtime screenshots
 - personal hostnames, tailnet domains, private IPs, usernames, and machine-specific absolute paths
+- `private-docs/` and maintainer-only release instructions
+- sibling private projects, audit directories, experiments, and other assets copied from the parent workspace
 - notes that only make sense for one private deployment rather than the reusable open-source project
 
 ## Replace with placeholders
@@ -44,3 +49,5 @@ Historical analysis notes are only safe to keep if they have been rewritten into
 - keep only reusable methods, failure patterns, and deployment lessons
 
 If a file still reads like a personal incident report, treat it as private-local-only until it is sanitized.
+
+If a staging copy still contains `private-docs/`, runtime directories, or parent-workspace assets, treat that copy as unsafe to publish.

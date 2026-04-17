@@ -6,13 +6,14 @@
 
 ## 仓库边界
 
+- [ ] 确认正在审查的是一份全新导出的、脱敏后的 staging 发布副本，而不是当前私有工作树
 - [ ] 确认发布根目录只有 `mobileCodexHelper/`
 - [ ] 确认没有把更大私有工作目录中的同级项目一起复制进来
 - [ ] 确认仓库叙事始终聚焦“手机控制本地 Codex”，而不是其它无关工具
 
 ## 私有本地内容
 
-- [ ] 删除 `vendor/`、`node_modules/`、`dist/`、`build/`、`.runtime/`、`tmp/`、`__pycache__/`
+- [ ] 删除 `vendor/`、`node_modules/`、`dist/`、`build/`、`.runtime/`、`tmp/`、`__pycache__/`、`.npm-cache/`、`private-docs/`
 - [ ] 删除数据库、日志、打包二进制、压缩包、session 导出、证书和私钥
 - [ ] 删除从私人运行环境导出的诊断包、运行截图和审批证据
 - [ ] 对照 [PRIVATE_LOCAL_ONLY.zh-CN.md](PRIVATE_LOCAL_ONLY.zh-CN.md) 确认没有遗漏
@@ -24,6 +25,7 @@
 - [ ] 确认截图和粘贴日志里没有机器专属信息
 - [ ] 确认部署文档只展示示例配置，而不是私人运行时值
 - [ ] 确认 `deploy/` 目录的说明里已经写清楚哪些文件是示例、哪些值必须本地定制
+- [ ] 确认 README 首页仍然是用户入口，不包含维护者内部发版步骤、deploy key 细节或私人运维说明
 
 ## 上游归属与许可
 
@@ -36,6 +38,7 @@
 - [ ] 在脱敏后的发布副本中运行 `powershell -ExecutionPolicy Bypass -File scripts/check-open-source-tree.ps1`
 - [ ] 如果覆盖层有改动，运行 `scripts/smoke-test-override-flow.ps1`
 - [ ] 运行 `python -m py_compile mobile_codex_control.py`
+- [ ] 如果新增了“公开安全版”分析文档，确认其中只保留可复用方法，不保留私人事故记录或真实运行证据
 - [ ] 人工核对最终文件列表，确认公开仓库仍然构成完整资料闭环：
   - `README`
   - 部署说明
