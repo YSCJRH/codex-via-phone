@@ -42,6 +42,7 @@ Read-only inspection and support export should go through scripts that are redac
 - `scripts/status-mobile-codex.ps1`
 - `scripts/doctor-mobile-codex.ps1`
 - `scripts/export-mobile-codex-support-bundle.ps1`
+- `scripts/export-mobile-codex-audit.ps1` (compatibility wrapper, still redacted by default)
 
 ## Prohibited Defaults
 

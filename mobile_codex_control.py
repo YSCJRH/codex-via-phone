@@ -371,6 +371,22 @@ def redact_path(value: str | None, index: int | None = None) -> str:
     return redacted_label("path", index or 1)
 
 
+def redact_url(value: str | None, index: int | None = None) -> str | None:
+    if not value:
+        return value
+
+    try:
+        parsed = urllib.parse.urlparse(str(value))
+    except ValueError:
+        return f"https://{redacted_label('host', index or 1)}"
+
+    scheme = parsed.scheme or "https"
+    host = redacted_label("host", index or 1)
+    port = f":{parsed.port}" if parsed.port else ""
+    path = parsed.path or ""
+    return f"{scheme}://{host}{port}{path}"
+
+
 def load_desktop_approval_bridge_status() -> dict[str, Any]:
     status = {
         "active": False,
@@ -733,14 +749,14 @@ def build_remote_endpoints(serve_data: dict[str, Any], fallback_dns: str | None)
     return endpoints
 
 
-def summarize_remote_urls(remote: dict[str, Any]) -> str:
+def summarize_remote_urls(remote: dict[str, Any], *, show_sensitive: bool = False) -> str:
     parts: list[str] = []
     primary = remote.get("primary_url")
     fallback = remote.get("fallback_url")
     if primary:
-        parts.append(f"Primary: {primary}")
+        parts.append(f"Primary: {primary if show_sensitive else redact_url(primary, 1)}")
     if fallback and fallback != primary:
-        parts.append(f"Fallback: {fallback}")
+        parts.append(f"Fallback: {fallback if show_sensitive else redact_url(fallback, 2)}")
     visibility = str(remote.get("visibility") or "").strip().lower()
     if visibility == "public-funnel":
         parts.append("Mode: PUBLIC INTERNET ENTRYPOINT via Tailscale Funnel")
@@ -844,6 +860,8 @@ def build_remote_block_v2(
     current_mode: str,
     app_ok: bool,
     target_ok: bool,
+    *,
+    show_sensitive: bool = False,
 ) -> tuple[StatusBlock, dict[str, Any]]:
     visibility = normalize_mode_name(remote.get("visibility") or current_mode)
     if not remote["published"]:
@@ -854,7 +872,7 @@ def build_remote_block_v2(
         block = StatusBlock("Mode", False, visibility, "No published entrypoint is active for the selected mode.", "warning")
         return block, {"value": visibility, "detail": block.detail, "level": "warning"}
 
-    route_text = summarize_remote_urls(remote)
+    route_text = summarize_remote_urls(remote, show_sensitive=show_sensitive)
     if not app_ok or not target_ok:
         detail = f"{route_text} | Published, but the local target is not healthy." if route_text else "Published, but the local target is not healthy."
         block = StatusBlock("Mode", False, visibility, detail, "warning")
@@ -1615,7 +1633,13 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
         if recent_requests
         else "暂无手机访问记录"
     )
-    mode_block, mode_summary = build_remote_block_v2(remote, app_bind_mode, True, remote_target_ok)
+    mode_block, mode_summary = build_remote_block_v2(
+        remote,
+        app_bind_mode,
+        True,
+        remote_target_ok,
+        show_sensitive=show_sensitive,
+    )
     mode_available = remote["published"] and remote_target_ok
 
     tailscale_running = bool(tailscale_status.get("ok") and backend_state == "Running")
@@ -1708,7 +1732,7 @@ def collect_status(*, show_sensitive: bool = False, include_internal: bool = Fal
     return {
         "checked_at": now_local().strftime("%Y-%m-%d %H:%M:%S"),
         "local_url": LOCAL_PANEL_URL,
-        "mode_url": remote["url"],
+        "mode_url": remote["url"] if show_sensitive else redact_url(remote["url"], 1),
         "blocks": [block.to_dict() for block in blocks],
         "mobile_peers": peers,
         "approved_devices": approved_devices,

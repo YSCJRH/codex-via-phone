@@ -42,6 +42,7 @@ legacy direct 已经不属于默认边界，只保留作迁移检测。
 - `scripts/status-mobile-codex.ps1`
 - `scripts/doctor-mobile-codex.ps1`
 - `scripts/export-mobile-codex-support-bundle.ps1`
+- `scripts/export-mobile-codex-audit.ps1`（兼容包装脚本，默认仍然脱敏）
 
 ## 禁止成为默认值的行为
 

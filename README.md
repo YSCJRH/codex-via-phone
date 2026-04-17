@@ -95,6 +95,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
   只读的环境与边界体检
 - `scripts/export-mobile-codex-support-bundle.ps1`
   默认脱敏的支持包导出
+- `scripts/export-mobile-codex-audit.ps1`
+  兼容包装脚本，默认同样导出脱敏支持包
 
 ## 文档
 

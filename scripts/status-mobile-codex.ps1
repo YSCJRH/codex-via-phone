@@ -48,29 +48,19 @@ if ($DryRun) {
 }
 
 if ($pythonCommand) {
-  $previousDontWriteBytecode = $env:PYTHONDONTWRITEBYTECODE
-  $env:PYTHONDONTWRITEBYTECODE = '1'
-  try {
-    $statusOutput = & $pythonCommand.Path (Join-Path $workspace 'mobile_codex_control.py') --json 2>&1 | Out-String
-    if ($LASTEXITCODE -eq 0) {
-      if ($EmitJson) {
-        $statusOutput.Trim()
-      } else {
-        $status = $statusOutput | ConvertFrom-Json
-        Write-Output "Mode: $($status.summary.mode_name)"
-        Write-Output "Local URL: $($status.local_url)"
-        Write-Output "Mode URL: $($status.mode_url)"
-        Write-Output "Approved devices: $($status.summary.approved_devices)"
-        Write-Output "Pending approvals: $($status.summary.pending_approvals)"
-      }
-      exit 0
-    }
-  } finally {
-    if ($null -eq $previousDontWriteBytecode) {
-      Remove-Item Env:\PYTHONDONTWRITEBYTECODE -ErrorAction SilentlyContinue
+  $statusOutput = & $pythonCommand.Path -B (Join-Path $workspace 'mobile_codex_control.py') --json 2>&1 | Out-String
+  if ($LASTEXITCODE -eq 0) {
+    if ($EmitJson) {
+      $statusOutput.Trim()
     } else {
-      $env:PYTHONDONTWRITEBYTECODE = $previousDontWriteBytecode
+      $status = $statusOutput | ConvertFrom-Json
+      Write-Output "Mode: $($status.summary.mode_name)"
+      Write-Output "Local URL: $($status.local_url)"
+      Write-Output "Mode URL: $($status.mode_url)"
+      Write-Output "Approved devices: $($status.summary.approved_devices)"
+      Write-Output "Pending approvals: $($status.summary.pending_approvals)"
     }
+    exit 0
   }
 }
 

@@ -202,6 +202,7 @@ Use these scripts when you want read-only inspection instead of a boundary chang
 - `powershell -ExecutionPolicy Bypass -File scripts/status-mobile-codex.ps1 -EmitJson`
 - `powershell -ExecutionPolicy Bypass -File scripts/doctor-mobile-codex.ps1 -EmitJson`
 - `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-support-bundle.ps1 -EmitJson`
+- `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-audit.ps1 -EmitJson`
 
 ## Optional Environment Variables
 

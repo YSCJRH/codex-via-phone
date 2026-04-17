@@ -95,6 +95,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
   Read-only environment and boundary checks
 - `scripts/export-mobile-codex-support-bundle.ps1`
   Redacted support bundle export for troubleshooting
+- `scripts/export-mobile-codex-audit.ps1`
+  Compatibility wrapper that now exports the same redacted support bundle by default
 
 ## Documentation
 

@@ -44,6 +44,7 @@ Use it when a user asks to install, bootstrap, verify, or explain this repositor
    - `powershell -ExecutionPolicy Bypass -File scripts/doctor-mobile-codex.ps1 -EmitJson`
 7. Export a redacted support bundle when needed:
    - `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-support-bundle.ps1 -EmitJson`
+   - legacy compatibility wrapper: `powershell -ExecutionPolicy Bypass -File scripts/export-mobile-codex-audit.ps1 -EmitJson`
 8. Only if the user wants to package the desktop tool as an `.exe`, install Python packaging dependencies:
    - `pip install -r requirements.txt`
 9. Launch the desktop control tool if needed:

@@ -348,20 +348,10 @@ function Emit-RedactedStatus {
     return
   }
 
-  $previousDontWriteBytecode = $env:PYTHONDONTWRITEBYTECODE
-  $env:PYTHONDONTWRITEBYTECODE = '1'
-  try {
-    $output = & $pythonPath (Join-Path $workspace 'mobile_codex_control.py') --json 2>&1 | Out-String
-    if ($LASTEXITCODE -eq 0) {
-      $output.Trim()
-      return
-    }
-  } finally {
-    if ($null -eq $previousDontWriteBytecode) {
-      Remove-Item Env:\PYTHONDONTWRITEBYTECODE -ErrorAction SilentlyContinue
-    } else {
-      $env:PYTHONDONTWRITEBYTECODE = $previousDontWriteBytecode
-    }
+  $output = & $pythonPath -B (Join-Path $workspace 'mobile_codex_control.py') --json 2>&1 | Out-String
+  if ($LASTEXITCODE -eq 0) {
+    $output.Trim()
+    return
   }
 
   ([ordered]@{
