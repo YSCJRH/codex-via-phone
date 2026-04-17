@@ -45,6 +45,8 @@ Phone browser
 - Prefer `tailnet-private` over `public-funnel`
 - Require desktop approval for every first-time device
 - Keep approval polling on a cookie-backed path instead of exposing request tokens in URLs
+- Approved devices are bound to a browser-held device key, not just a localStorage UUID
+- Legacy trusted devices must be re-approved once to register a device key
 - Treat the browser Origin allowlist in `.runtime/mode-config.json` as the remote web entry contract
 - Keep hardened mode enabled by default
 - Treat `.runtime/mode-config.json` as the boundary configuration source

@@ -111,6 +111,8 @@ With it:
 
 The polling side of that flow should stay cookie-backed. The phone should ask `/api/auth/device-approval` for status, while the request token itself stays in an `httpOnly` cookie instead of being exposed in the URL.
 
+After approval, trust should move from "this browser says it has UUID X" to "this browser can prove possession of the approved device key for UUID X". That is why the login flow now includes a short-lived device-key challenge before the auth session is issued.
+
 ## Keep These Four Points in Mind
 
 1. Default to `localhost`.

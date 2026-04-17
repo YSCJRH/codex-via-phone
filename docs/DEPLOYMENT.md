@@ -196,6 +196,8 @@ When a new device logs in for the first time:
 
 The approval poll stays on `/api/auth/device-approval` and uses a short-lived `httpOnly` cookie. The phone should not receive or reuse a request token URL.
 
+After a device is approved, later sign-ins from that same browser must complete a short-lived device-key challenge. If you are migrating from an older UUID-only approval record, expect one re-approval so the device key can be registered.
+
 Do not skip this. It is part of the default trust boundary.
 
 ## Read-Only Inspection Scripts

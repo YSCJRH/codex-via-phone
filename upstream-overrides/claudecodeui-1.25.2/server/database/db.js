@@ -126,6 +126,9 @@ const runMigrations = () => {
       device_name TEXT,
       platform TEXT,
       app_type TEXT,
+      device_public_key_spki TEXT,
+      device_key_thumbprint TEXT,
+      key_registered_at DATETIME,
       first_approved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       last_seen DATETIME,
       last_login DATETIME,
@@ -137,6 +140,7 @@ const runMigrations = () => {
     )`);
     db.exec('CREATE INDEX IF NOT EXISTS idx_trusted_devices_user_id ON trusted_devices(user_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_trusted_devices_lookup ON trusted_devices(user_id, device_id, is_active)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_trusted_devices_thumbprint ON trusted_devices(user_id, device_key_thumbprint, is_active)');
 
     db.exec(`CREATE TABLE IF NOT EXISTS device_approval_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,6 +149,9 @@ const runMigrations = () => {
       device_name TEXT,
       platform TEXT,
       app_type TEXT,
+      approval_kind TEXT NOT NULL DEFAULT 'new-device',
+      device_public_key_spki TEXT,
+      device_key_thumbprint TEXT,
       request_token TEXT UNIQUE NOT NULL,
       requested_ip TEXT,
       requested_user_agent TEXT,
@@ -158,6 +165,53 @@ const runMigrations = () => {
     )`);
     db.exec('CREATE INDEX IF NOT EXISTS idx_device_approval_lookup ON device_approval_requests(user_id, device_id, status)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_device_approval_token ON device_approval_requests(request_token)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_device_approval_thumbprint ON device_approval_requests(user_id, device_key_thumbprint, status)');
+
+    db.exec(`CREATE TABLE IF NOT EXISTS device_auth_challenges (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      device_id TEXT NOT NULL,
+      device_key_thumbprint TEXT NOT NULL,
+      device_public_key_spki TEXT NOT NULL,
+      challenge_nonce TEXT NOT NULL,
+      requested_ip TEXT,
+      requested_user_agent TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      completed_at DATETIME,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_device_auth_challenges_lookup ON device_auth_challenges(user_id, device_id, status)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_device_auth_challenges_thumbprint ON device_auth_challenges(user_id, device_key_thumbprint, status)');
+
+    const trustedDevicesColumns = db.prepare("PRAGMA table_info(trusted_devices)").all().map((column) => column.name);
+    if (!trustedDevicesColumns.includes('device_public_key_spki')) {
+      console.log('Running migration: Adding device_public_key_spki to trusted_devices');
+      db.exec('ALTER TABLE trusted_devices ADD COLUMN device_public_key_spki TEXT');
+    }
+    if (!trustedDevicesColumns.includes('device_key_thumbprint')) {
+      console.log('Running migration: Adding device_key_thumbprint to trusted_devices');
+      db.exec('ALTER TABLE trusted_devices ADD COLUMN device_key_thumbprint TEXT');
+    }
+    if (!trustedDevicesColumns.includes('key_registered_at')) {
+      console.log('Running migration: Adding key_registered_at to trusted_devices');
+      db.exec('ALTER TABLE trusted_devices ADD COLUMN key_registered_at DATETIME');
+    }
+
+    const approvalColumns = db.prepare("PRAGMA table_info(device_approval_requests)").all().map((column) => column.name);
+    if (!approvalColumns.includes('approval_kind')) {
+      console.log('Running migration: Adding approval_kind to device_approval_requests');
+      db.exec("ALTER TABLE device_approval_requests ADD COLUMN approval_kind TEXT NOT NULL DEFAULT 'new-device'");
+    }
+    if (!approvalColumns.includes('device_public_key_spki')) {
+      console.log('Running migration: Adding device_public_key_spki to device_approval_requests');
+      db.exec('ALTER TABLE device_approval_requests ADD COLUMN device_public_key_spki TEXT');
+    }
+    if (!approvalColumns.includes('device_key_thumbprint')) {
+      console.log('Running migration: Adding device_key_thumbprint to device_approval_requests');
+      db.exec('ALTER TABLE device_approval_requests ADD COLUMN device_key_thumbprint TEXT');
+    }
 
     console.log('Database migrations completed successfully');
   } catch (error) {
@@ -430,6 +484,19 @@ const trustedDevicesDb = {
     }
   },
 
+  getApprovedDeviceByThumbprint: (userId, deviceKeyThumbprint) => {
+    try {
+      return db.prepare(`
+        SELECT *
+        FROM trusted_devices
+        WHERE user_id = ? AND device_key_thumbprint = ? AND is_active = 1
+        LIMIT 1
+      `).get(userId, deviceKeyThumbprint);
+    } catch (err) {
+      throw err;
+    }
+  },
+
   listApprovedDevices: (userId) => {
     try {
       return db.prepare(`
@@ -451,6 +518,8 @@ const trustedDevicesDb = {
       ip = null,
       userAgent = null,
       updateLogin = false,
+      devicePublicKeySpki = null,
+      deviceKeyThumbprint = null,
     } = metadata;
 
     try {
@@ -465,12 +534,29 @@ const trustedDevicesDb = {
           device_name = COALESCE(?, device_name),
           platform = COALESCE(?, platform),
           app_type = COALESCE(?, app_type),
+          device_public_key_spki = COALESCE(?, device_public_key_spki),
+          device_key_thumbprint = COALESCE(?, device_key_thumbprint),
+          key_registered_at = CASE
+            WHEN COALESCE(?, device_key_thumbprint) IS NOT NULL AND key_registered_at IS NULL THEN CURRENT_TIMESTAMP
+            ELSE key_registered_at
+          END,
           last_seen = CURRENT_TIMESTAMP,
           last_login = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE last_login END,
           last_ip = COALESCE(?, last_ip),
           last_user_agent = COALESCE(?, last_user_agent)
         WHERE id = ?
-      `).run(deviceName, platform, appType, updateLogin ? 1 : 0, ip, userAgent, device.id);
+      `).run(
+        deviceName,
+        platform,
+        appType,
+        devicePublicKeySpki,
+        deviceKeyThumbprint,
+        deviceKeyThumbprint,
+        updateLogin ? 1 : 0,
+        ip,
+        userAgent,
+        device.id,
+      );
 
       return trustedDevicesDb.getApprovedDevice(userId, deviceId);
     } catch (err) {
@@ -485,6 +571,8 @@ const trustedDevicesDb = {
       appType = null,
       ip = null,
       userAgent = null,
+      devicePublicKeySpki = null,
+      deviceKeyThumbprint = null,
     } = metadata;
 
     try {
@@ -495,6 +583,9 @@ const trustedDevicesDb = {
           device_name,
           platform,
           app_type,
+          device_public_key_spki,
+          device_key_thumbprint,
+          key_registered_at,
           first_approved_at,
           last_seen,
           last_login,
@@ -502,18 +593,35 @@ const trustedDevicesDb = {
           last_user_agent,
           is_active
         )
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, 1)
+        VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, 1)
         ON CONFLICT(user_id, device_id)
         DO UPDATE SET
           device_name = excluded.device_name,
           platform = excluded.platform,
           app_type = excluded.app_type,
+          device_public_key_spki = COALESCE(excluded.device_public_key_spki, trusted_devices.device_public_key_spki),
+          device_key_thumbprint = COALESCE(excluded.device_key_thumbprint, trusted_devices.device_key_thumbprint),
+          key_registered_at = CASE
+            WHEN excluded.device_key_thumbprint IS NOT NULL THEN COALESCE(trusted_devices.key_registered_at, CURRENT_TIMESTAMP)
+            ELSE trusted_devices.key_registered_at
+          END,
           last_seen = CURRENT_TIMESTAMP,
           last_login = CURRENT_TIMESTAMP,
           last_ip = excluded.last_ip,
           last_user_agent = excluded.last_user_agent,
           is_active = 1
-      `).run(userId, deviceId, deviceName, platform, appType, ip, userAgent);
+      `).run(
+        userId,
+        deviceId,
+        deviceName,
+        platform,
+        appType,
+        devicePublicKeySpki,
+        deviceKeyThumbprint,
+        deviceKeyThumbprint,
+        ip,
+        userAgent,
+      );
 
       return trustedDevicesDb.getApprovedDevice(userId, deviceId);
     } catch (err) {
@@ -540,6 +648,9 @@ const trustedDevicesDb = {
       appType = null,
       ip = null,
       userAgent = null,
+      devicePublicKeySpki = null,
+      deviceKeyThumbprint = null,
+      approvalKind = 'new-device',
     } = metadata;
 
     try {
@@ -556,6 +667,9 @@ const trustedDevicesDb = {
           device_name,
           platform,
           app_type,
+          approval_kind,
+          device_public_key_spki,
+          device_key_thumbprint,
           request_token,
           requested_ip,
           requested_user_agent,
@@ -563,8 +677,20 @@ const trustedDevicesDb = {
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).run(userId, deviceId, deviceName, platform, appType, requestToken, ip, userAgent);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).run(
+        userId,
+        deviceId,
+        deviceName,
+        platform,
+        appType,
+        approvalKind,
+        devicePublicKeySpki,
+        deviceKeyThumbprint,
+        requestToken,
+        ip,
+        userAgent,
+      );
 
       return trustedDevicesDb.getApprovalRequestByToken(requestToken);
     } catch (err) {
@@ -613,6 +739,82 @@ const trustedDevicesDb = {
       `).run(status, note, requestToken);
 
       return result.changes > 0;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  createDeviceAuthChallenge: (userId, deviceId, deviceKeyThumbprint, devicePublicKeySpki, metadata = {}) => {
+    const {
+      ip = null,
+      userAgent = null,
+      ttlSeconds = 300,
+    } = metadata;
+
+    try {
+      const challengeId = crypto.randomUUID();
+      const challengeNonce = crypto.randomBytes(32).toString('base64url');
+      const expiresAt = new Date(Date.now() + (ttlSeconds * 1000)).toISOString();
+
+      db.prepare(`
+        UPDATE device_auth_challenges
+        SET status = 'superseded'
+        WHERE user_id = ? AND device_id = ? AND status = 'pending'
+      `).run(userId, deviceId);
+
+      db.prepare(`
+        INSERT INTO device_auth_challenges (
+          id,
+          user_id,
+          device_id,
+          device_key_thumbprint,
+          device_public_key_spki,
+          challenge_nonce,
+          requested_ip,
+          requested_user_agent,
+          status,
+          created_at,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, ?)
+      `).run(
+        challengeId,
+        userId,
+        deviceId,
+        deviceKeyThumbprint,
+        devicePublicKeySpki,
+        challengeNonce,
+        ip,
+        userAgent,
+        expiresAt,
+      );
+
+      return trustedDevicesDb.getDeviceAuthChallenge(challengeId);
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  getDeviceAuthChallenge: (challengeId) => {
+    try {
+      return db.prepare(`
+        SELECT *
+        FROM device_auth_challenges
+        WHERE id = ?
+        LIMIT 1
+      `).get(challengeId);
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  completeDeviceAuthChallenge: (challengeId) => {
+    try {
+      return db.prepare(`
+        UPDATE device_auth_challenges
+        SET status = 'completed', completed_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = 'pending'
+      `).run(challengeId).changes > 0;
     } catch (err) {
       throw err;
     }

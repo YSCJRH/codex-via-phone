@@ -14,6 +14,7 @@ import {
 
 const router = express.Router();
 const sanitizeUser = (user) => ({ id: user.id, username: user.username });
+const DEVICE_CHALLENGE_TTL_SECONDS = 300;
 
 const getRequestIp = (req) => {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -37,6 +38,15 @@ const normalizeTextField = (value, maxLength = 160) => {
   return trimmed.slice(0, maxLength);
 };
 
+const normalizeBase64UrlField = (value, maxLength = 4096) => {
+  const normalized = normalizeTextField(value, maxLength);
+  if (!normalized) {
+    return null;
+  }
+
+  return /^[A-Za-z0-9_-]+$/.test(normalized) ? normalized : null;
+};
+
 const getDeviceMetadataFromRequest = (req) => ({
   deviceId: normalizeTextField(req.body?.deviceId, 128),
   deviceName: normalizeTextField(req.body?.deviceName, 160),
@@ -44,7 +54,14 @@ const getDeviceMetadataFromRequest = (req) => ({
   appType: normalizeTextField(req.body?.appType, 80),
   ip: getRequestIp(req),
   userAgent: normalizeTextField(req.headers['user-agent'], 512),
+  devicePublicKeySpki: normalizeBase64UrlField(req.body?.devicePublicKeySpki, 4096),
+  deviceKeyThumbprint: normalizeBase64UrlField(req.body?.deviceKeyThumbprint, 256),
+  challengeId: normalizeTextField(req.body?.challengeId, 128),
+  deviceChallengeSignature: normalizeBase64UrlField(req.body?.deviceChallengeSignature, 1024),
 });
+
+const hasDeviceKeyMetadata = (deviceMetadata) =>
+  Boolean(deviceMetadata?.devicePublicKeySpki && deviceMetadata?.deviceKeyThumbprint);
 
 const buildApprovalPayload = (
   request,
@@ -53,8 +70,21 @@ const buildApprovalPayload = (
   success: false,
   approvalRequired: true,
   approvalStatus: request.status,
+  approvalKind: request.approval_kind || 'new-device',
   message,
   deviceName: request.device_name || request.device_id,
+});
+
+const buildChallengePayload = (
+  challenge,
+  message = 'Approved devices must prove possession of their device key before sign-in completes.',
+) => ({
+  success: false,
+  challengeRequired: true,
+  challengeId: challenge.id,
+  challengeNonce: challenge.challenge_nonce,
+  challengeExpiresAt: challenge.expires_at,
+  message,
 });
 
 const issueAuthSession = (req, res, user, deviceMetadata = null) => {
@@ -62,6 +92,7 @@ const issueAuthSession = (req, res, user, deviceMetadata = null) => {
     deviceId: deviceMetadata?.deviceId || null,
     deviceName: deviceMetadata?.deviceName || null,
     appType: deviceMetadata?.appType || null,
+    deviceKeyThumbprint: deviceMetadata?.deviceKeyThumbprint || null,
   });
 
   setAuthCookie(res, token, req);
@@ -72,6 +103,46 @@ const issueAuthSession = (req, res, user, deviceMetadata = null) => {
     token,
     user: sanitizeUser(user),
   };
+};
+
+const queueDeviceApproval = (req, res, user, deviceMetadata, approvalKind, message) => {
+  const requestToken = crypto.randomBytes(24).toString('hex');
+  const request = trustedDevicesDb.createOrRefreshPendingApproval(
+    user.id,
+    deviceMetadata.deviceId,
+    requestToken,
+    {
+      ...deviceMetadata,
+      approvalKind,
+    },
+  );
+
+  setPendingApprovalCookie(res, request.request_token, req);
+  return res.status(202).json(buildApprovalPayload(request, message));
+};
+
+const toBase64UrlBuffer = (value) => Buffer.from(value, 'base64url');
+
+const verifyDeviceChallengeSignature = async (devicePublicKeySpki, challengeNonce, signature) => {
+  const subtle = crypto.webcrypto?.subtle;
+  if (!subtle) {
+    throw new Error('Server WebCrypto is unavailable for device-key verification.');
+  }
+
+  const publicKey = await subtle.importKey(
+    'spki',
+    toBase64UrlBuffer(devicePublicKeySpki),
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['verify'],
+  );
+
+  return subtle.verify(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    publicKey,
+    toBase64UrlBuffer(signature),
+    Buffer.from(challengeNonce, 'utf8'),
+  );
 };
 
 router.get('/status', async (req, res) => {
@@ -107,6 +178,7 @@ router.get('/device-approval', async (req, res) => {
     return res.json({
       success: true,
       approvalStatus: request.status,
+      approvalKind: request.approval_kind || 'new-device',
       message:
         request.status === 'approved'
           ? 'Device approved. Please complete sign-in again.'
@@ -135,6 +207,14 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Username must be at least 3 characters and password at least 6 characters.' });
     }
 
+    if (!deviceMetadata.deviceId) {
+      return res.status(400).json({ error: 'This client did not send a device identifier. Refresh and try again.' });
+    }
+
+    if (!hasDeviceKeyMetadata(deviceMetadata)) {
+      return res.status(400).json({ error: 'This browser must register a device key before setup can finish.' });
+    }
+
     db.prepare('BEGIN').run();
     try {
       const hasUsers = userDb.hasUsers();
@@ -147,13 +227,11 @@ router.post('/register', async (req, res) => {
       const passwordHash = await bcrypt.hash(password, saltRounds);
       const user = userDb.createUser(username, passwordHash);
 
-      if (deviceMetadata.deviceId) {
-        trustedDevicesDb.approveDevice(user.id, deviceMetadata.deviceId, deviceMetadata);
-      }
+      trustedDevicesDb.approveDevice(user.id, deviceMetadata.deviceId, deviceMetadata);
 
       db.prepare('COMMIT').run();
       userDb.updateLastLogin(user.id);
-      res.json(issueAuthSession(req, res, user, deviceMetadata.deviceId ? deviceMetadata : null));
+      res.json(issueAuthSession(req, res, user, deviceMetadata));
     } catch (error) {
       db.prepare('ROLLBACK').run();
       throw error;
@@ -181,6 +259,10 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'This client did not send a device identifier. Refresh and try again.' });
     }
 
+    if (!hasDeviceKeyMetadata(deviceMetadata)) {
+      return res.status(400).json({ error: 'This browser must provide a device key before sign-in can continue.' });
+    }
+
     const user = userDb.getUserByUsername(username);
     if (!user) {
       return res.status(401).json({ error: 'Invalid username or password.' });
@@ -193,17 +275,86 @@ router.post('/login', async (req, res) => {
 
     const approvedDevice = trustedDevicesDb.getApprovedDevice(user.id, deviceMetadata.deviceId);
     if (!approvedDevice) {
-      const requestToken = crypto.randomBytes(24).toString('hex');
-      const request = trustedDevicesDb.createOrRefreshPendingApproval(
-        user.id,
-        deviceMetadata.deviceId,
-        requestToken,
+      return queueDeviceApproval(
+        req,
+        res,
+        user,
         deviceMetadata,
+        'new-device',
+        'This new device must be approved on the desktop before sign-in can continue.',
       );
-      setPendingApprovalCookie(res, request.request_token, req);
-      return res.status(202).json(buildApprovalPayload(request));
     }
 
+    if (!approvedDevice.device_key_thumbprint || !approvedDevice.device_public_key_spki) {
+      return queueDeviceApproval(
+        req,
+        res,
+        user,
+        deviceMetadata,
+        'legacy-upgrade',
+        'This previously trusted device must be re-approved on the desktop to register its device key.',
+      );
+    }
+
+    if (
+      approvedDevice.device_key_thumbprint !== deviceMetadata.deviceKeyThumbprint
+      || approvedDevice.device_public_key_spki !== deviceMetadata.devicePublicKeySpki
+    ) {
+      return queueDeviceApproval(
+        req,
+        res,
+        user,
+        deviceMetadata,
+        'device-key-rotation',
+        'This device key does not match the approved record. Desktop re-approval is required.',
+      );
+    }
+
+    if (!deviceMetadata.challengeId || !deviceMetadata.deviceChallengeSignature) {
+      const challenge = trustedDevicesDb.createDeviceAuthChallenge(
+        user.id,
+        deviceMetadata.deviceId,
+        deviceMetadata.deviceKeyThumbprint,
+        deviceMetadata.devicePublicKeySpki,
+        {
+          ip: deviceMetadata.ip,
+          userAgent: deviceMetadata.userAgent,
+          ttlSeconds: DEVICE_CHALLENGE_TTL_SECONDS,
+        },
+      );
+
+      return res.status(401).json(buildChallengePayload(challenge));
+    }
+
+    const challenge = trustedDevicesDb.getDeviceAuthChallenge(deviceMetadata.challengeId);
+    if (!challenge || challenge.status !== 'pending') {
+      return res.status(401).json({ error: 'Device challenge expired. Start sign-in again.' });
+    }
+
+    const expiresAtMs = Date.parse(challenge.expires_at || '');
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+      return res.status(401).json({ error: 'Device challenge expired. Start sign-in again.' });
+    }
+
+    if (
+      challenge.user_id !== user.id
+      || challenge.device_id !== deviceMetadata.deviceId
+      || challenge.device_key_thumbprint !== deviceMetadata.deviceKeyThumbprint
+      || challenge.device_public_key_spki !== deviceMetadata.devicePublicKeySpki
+    ) {
+      return res.status(403).json({ error: 'Device challenge does not match this sign-in attempt.' });
+    }
+
+    const signatureIsValid = await verifyDeviceChallengeSignature(
+      challenge.device_public_key_spki,
+      challenge.challenge_nonce,
+      deviceMetadata.deviceChallengeSignature,
+    );
+    if (!signatureIsValid) {
+      return res.status(403).json({ error: 'Device key proof could not be verified.' });
+    }
+
+    trustedDevicesDb.completeDeviceAuthChallenge(challenge.id);
     trustedDevicesDb.touchApprovedDevice(user.id, deviceMetadata.deviceId, {
       ...deviceMetadata,
       updateLogin: true,

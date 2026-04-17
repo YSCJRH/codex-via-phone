@@ -118,6 +118,16 @@ const validateTrustedDeviceFromPayload = (user, payload) => {
     return { ok: false, device: null };
   }
 
+   if (device.device_key_thumbprint) {
+    if (!payload?.deviceKeyThumbprint) {
+      return { ok: false, device: null };
+    }
+
+    if (payload.deviceKeyThumbprint !== device.device_key_thumbprint) {
+      return { ok: false, device: null };
+    }
+  }
+
   return { ok: true, device };
 };
 
@@ -177,6 +187,7 @@ const authenticateToken = async (req, res, next) => {
             deviceId: decoded.deviceId || null,
             deviceName: decoded.deviceName || null,
             appType: decoded.appType || null,
+            deviceKeyThumbprint: decoded.deviceKeyThumbprint || null,
           }),
           req,
         );
@@ -207,6 +218,7 @@ const generateToken = (user, options = {}) =>
       ...(options.deviceId ? { deviceId: options.deviceId } : {}),
       ...(options.deviceName ? { deviceName: options.deviceName } : {}),
       ...(options.appType ? { appType: options.appType } : {}),
+      ...(options.deviceKeyThumbprint ? { deviceKeyThumbprint: options.deviceKeyThumbprint } : {}),
     },
     JWT_SECRET,
     { expiresIn: TOKEN_LIFETIME },

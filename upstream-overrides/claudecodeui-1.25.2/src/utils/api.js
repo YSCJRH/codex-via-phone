@@ -45,10 +45,11 @@ export const authenticatedFetch = (url, options = {}) => {
   });
 };
 
-const buildAuthPayload = (username, password) => ({
+const buildAuthPayload = async (username, password, extraPayload = {}) => ({
   username,
   password,
-  ...getDeviceIdentity(),
+  ...(await getDeviceIdentity()),
+  ...extraPayload,
 });
 
 // API endpoints
@@ -56,17 +57,17 @@ export const api = {
   // Auth endpoints (no token required)
   auth: {
     status: () => fetch('/api/auth/status', { credentials: 'same-origin' }),
-    login: (username, password) => fetch('/api/auth/login', {
+    login: async (username, password, extraPayload = {}) => fetch('/api/auth/login', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildAuthPayload(username, password)),
+      body: JSON.stringify(await buildAuthPayload(username, password, extraPayload)),
     }),
-    register: (username, password) => fetch('/api/auth/register', {
+    register: async (username, password, extraPayload = {}) => fetch('/api/auth/register', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildAuthPayload(username, password)),
+      body: JSON.stringify(await buildAuthPayload(username, password, extraPayload)),
     }),
     deviceApprovalStatus: () =>
       fetch('/api/auth/device-approval', { credentials: 'same-origin' }),

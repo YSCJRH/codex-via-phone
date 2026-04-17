@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { IS_PLATFORM } from '../../../constants/config';
 import { api } from '../../../utils/api';
-import { clearDeviceSession, getDeviceIdentity, storeDeviceSession } from '../deviceTrust.js';
+import { clearDeviceSession, getDeviceIdentity, signDeviceChallenge, storeDeviceSession } from '../deviceTrust.js';
 import { AUTH_ERROR_MESSAGES } from '../constants';
 import type {
   AuthContextValue,
@@ -115,8 +115,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (username, password) => {
       try {
         setError(null);
-        const response = await api.auth.login(username, password);
-        const payload = await parseJsonSafely<AuthSessionPayload>(response);
+        const deviceIdentity = await getDeviceIdentity();
+        let response = await api.auth.login(username, password, deviceIdentity);
+        let payload = await parseJsonSafely<AuthSessionPayload>(response);
+
+        if (
+          (!response.ok || !payload?.user)
+          && payload?.challengeRequired
+          && payload.challengeId
+          && payload.challengeNonce
+        ) {
+          const deviceChallengeSignature = await signDeviceChallenge(payload.challengeNonce);
+          response = await api.auth.login(username, password, {
+            ...deviceIdentity,
+            challengeId: payload.challengeId,
+            deviceChallengeSignature,
+          });
+          payload = await parseJsonSafely<AuthSessionPayload>(response);
+        }
 
         if (!response.ok || !payload?.user) {
           if (payload?.approvalRequired) {
@@ -124,6 +140,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
               success: false,
               error: payload.message || AUTH_ERROR_MESSAGES.deviceApprovalRequired,
               approvalRequired: true,
+            };
+          }
+          if (payload?.challengeRequired && payload?.challengeId && payload?.challengeNonce) {
+            const message = payload.message || 'Device key confirmation is required before sign-in can finish.';
+            setError(message);
+            return {
+              success: false,
+              error: message,
+              challengeRequired: true,
+              challengeId: payload.challengeId,
+              challengeNonce: payload.challengeNonce,
+              challengeExpiresAt: payload.challengeExpiresAt,
             };
           }
           const message = resolveApiErrorMessage(payload, AUTH_ERROR_MESSAGES.loginFailed);
@@ -135,7 +163,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           storeDeviceSession({
             token: payload.token,
             username: payload.user.username,
-            deviceId: getDeviceIdentity().deviceId,
+            deviceId: deviceIdentity.deviceId,
+            deviceKeyThumbprint: deviceIdentity.deviceKeyThumbprint,
           });
         }
         setSession(payload.user);
@@ -144,8 +173,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: true };
       } catch (caughtError) {
         console.error('Login error:', caughtError);
-        setError(AUTH_ERROR_MESSAGES.networkError);
-        return { success: false, error: AUTH_ERROR_MESSAGES.networkError };
+        const message = caughtError instanceof Error ? caughtError.message : AUTH_ERROR_MESSAGES.networkError;
+        setError(message);
+        return { success: false, error: message };
       }
     },
     [checkOnboardingStatus, setSession],
@@ -155,7 +185,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (username, password) => {
       try {
         setError(null);
-        const response = await api.auth.register(username, password);
+        const deviceIdentity = await getDeviceIdentity();
+        const response = await api.auth.register(username, password, deviceIdentity);
         const payload = await parseJsonSafely<AuthSessionPayload>(response);
 
         if (!response.ok || !payload?.user) {
@@ -168,7 +199,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           storeDeviceSession({
             token: payload.token,
             username: payload.user.username,
-            deviceId: getDeviceIdentity().deviceId,
+            deviceId: deviceIdentity.deviceId,
+            deviceKeyThumbprint: deviceIdentity.deviceKeyThumbprint,
           });
         }
         setSession(payload.user);
@@ -177,8 +209,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: true };
       } catch (caughtError) {
         console.error('Registration error:', caughtError);
-        setError(AUTH_ERROR_MESSAGES.networkError);
-        return { success: false, error: AUTH_ERROR_MESSAGES.networkError };
+        const message = caughtError instanceof Error ? caughtError.message : AUTH_ERROR_MESSAGES.networkError;
+        setError(message);
+        return { success: false, error: message };
       }
     },
     [checkOnboardingStatus, setSession],

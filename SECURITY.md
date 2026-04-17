@@ -40,6 +40,8 @@ Use `scripts/install-mobile-codex.ps1` as the normal boundary-changing entrypoin
 
 Device approval polling should stay on the cookie-backed `/api/auth/device-approval` path. Request tokens should not be exposed in URLs, default JSON, or screenshots.
 
+Approved devices should be tied to a WebCrypto device key. A localStorage UUID may still identify the device record, but it should not be treated as the only trust root anymore.
+
 Web access should stay behind explicit allowlists:
 
 - the app should normally be reached through the local nginx proxy path
@@ -62,6 +64,7 @@ The following must not become defaults in docs, scripts, or shipped config:
 - treating `tailnet-private` as if it were Funnel or a direct tailnet IP bind
 - approval-free login for new devices
 - query-token style approval polling or WebSocket auth
+- trusting a device by UUID alone after the device-key upgrade is available
 - publishing tokens, secrets, diagnostics evidence, or approval traces by default
 
 ## Public-Safe Output Rules

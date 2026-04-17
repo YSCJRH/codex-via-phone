@@ -111,6 +111,8 @@ legacy direct 只作为迁移状态保留，已经不再属于默认边界，也
 
 轮询链路本身也要收口：手机只轮询 `/api/auth/device-approval`，request token 保留在 `httpOnly` cookie 里，不再放进 URL。
 
+批准之后，信任语义也要升级：不再是“这个浏览器自称 UUID 是谁”，而是“这个浏览器能证明自己持有已批准设备对应的私钥”。因此登录流程现在会在发放会话前增加一次短时设备密钥 challenge。
+
 ## 记住这四点就够了
 
 1. 默认从 `localhost` 开始。

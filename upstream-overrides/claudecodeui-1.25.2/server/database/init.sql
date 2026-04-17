@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS trusted_devices (
     device_name TEXT,
     platform TEXT,
     app_type TEXT,
+    device_public_key_spki TEXT,
+    device_key_thumbprint TEXT,
+    key_registered_at DATETIME,
     first_approved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_seen DATETIME,
     last_login DATETIME,
@@ -84,6 +87,7 @@ CREATE TABLE IF NOT EXISTS trusted_devices (
 
 CREATE INDEX IF NOT EXISTS idx_trusted_devices_user_id ON trusted_devices(user_id);
 CREATE INDEX IF NOT EXISTS idx_trusted_devices_lookup ON trusted_devices(user_id, device_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_trusted_devices_thumbprint ON trusted_devices(user_id, device_key_thumbprint, is_active);
 
 -- Pending device approvals that must be confirmed from the PC desktop control tool
 CREATE TABLE IF NOT EXISTS device_approval_requests (
@@ -93,6 +97,9 @@ CREATE TABLE IF NOT EXISTS device_approval_requests (
     device_name TEXT,
     platform TEXT,
     app_type TEXT,
+    approval_kind TEXT NOT NULL DEFAULT 'new-device',
+    device_public_key_spki TEXT,
+    device_key_thumbprint TEXT,
     request_token TEXT UNIQUE NOT NULL,
     requested_ip TEXT,
     requested_user_agent TEXT,
@@ -107,6 +114,27 @@ CREATE TABLE IF NOT EXISTS device_approval_requests (
 
 CREATE INDEX IF NOT EXISTS idx_device_approval_lookup ON device_approval_requests(user_id, device_id, status);
 CREATE INDEX IF NOT EXISTS idx_device_approval_token ON device_approval_requests(request_token);
+CREATE INDEX IF NOT EXISTS idx_device_approval_thumbprint ON device_approval_requests(user_id, device_key_thumbprint, status);
+
+-- Short-lived device-key login challenges for approved devices
+CREATE TABLE IF NOT EXISTS device_auth_challenges (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    device_id TEXT NOT NULL,
+    device_key_thumbprint TEXT NOT NULL,
+    device_public_key_spki TEXT NOT NULL,
+    challenge_nonce TEXT NOT NULL,
+    requested_ip TEXT,
+    requested_user_agent TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    completed_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_auth_challenges_lookup ON device_auth_challenges(user_id, device_id, status);
+CREATE INDEX IF NOT EXISTS idx_device_auth_challenges_thumbprint ON device_auth_challenges(user_id, device_key_thumbprint, status);
 
 -- App configuration table (auto-generated secrets, settings, etc.)
 CREATE TABLE IF NOT EXISTS app_config (

@@ -45,6 +45,8 @@
 - 需要远程访问时，优先使用 `tailnet-private`
 - 每台新设备第一次登录都必须经过桌面审批
 - 审批轮询固定走 cookie-backed `/api/auth/device-approval`，不在 URL 中暴露 request token
+- 已批准设备会绑定浏览器持有的设备密钥，而不是只依赖 localStorage UUID
+- 旧的 legacy trusted device 需要重新审批一次，才能补齐设备密钥
 - 浏览器 Origin 白名单以 `.runtime/mode-config.json` 为准
 - 默认保持 hardened mode 开启
 - 把 `.runtime/mode-config.json` 视为边界配置源

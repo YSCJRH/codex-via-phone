@@ -1328,6 +1328,8 @@ def list_pending_device_approvals(limit: int = 20) -> list[dict[str, Any]]:
                     dar.device_name,
                     dar.platform,
                     dar.app_type,
+                    dar.approval_kind,
+                    dar.device_key_thumbprint,
                     dar.requested_ip,
                     dar.requested_user_agent,
                     dar.created_at,
@@ -1364,6 +1366,8 @@ def list_approved_devices(limit: int = 50) -> list[dict[str, Any]]:
                     td.device_name,
                     td.platform,
                     td.app_type,
+                    td.device_key_thumbprint,
+                    td.key_registered_at,
                     td.first_approved_at,
                     td.last_seen,
                     td.last_login,
@@ -1415,6 +1419,9 @@ def resolve_device_request(request_token: str, approved: bool) -> bool:
                         device_name,
                         platform,
                         app_type,
+                        device_public_key_spki,
+                        device_key_thumbprint,
+                        key_registered_at,
                         first_approved_at,
                         last_seen,
                         last_login,
@@ -1422,12 +1429,18 @@ def resolve_device_request(request_token: str, approved: bool) -> bool:
                         last_user_agent,
                         is_active
                     )
-                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, 1)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, 1)
                     ON CONFLICT(user_id, device_id)
                     DO UPDATE SET
                         device_name = excluded.device_name,
                         platform = excluded.platform,
                         app_type = excluded.app_type,
+                        device_public_key_spki = COALESCE(excluded.device_public_key_spki, trusted_devices.device_public_key_spki),
+                        device_key_thumbprint = COALESCE(excluded.device_key_thumbprint, trusted_devices.device_key_thumbprint),
+                        key_registered_at = CASE
+                            WHEN excluded.device_key_thumbprint IS NOT NULL THEN COALESCE(trusted_devices.key_registered_at, CURRENT_TIMESTAMP)
+                            ELSE trusted_devices.key_registered_at
+                        END,
                         last_seen = CURRENT_TIMESTAMP,
                         last_login = CURRENT_TIMESTAMP,
                         last_ip = excluded.last_ip,
@@ -1440,6 +1453,9 @@ def resolve_device_request(request_token: str, approved: bool) -> bool:
                         row["device_name"],
                         row["platform"],
                         row["app_type"],
+                        row["device_public_key_spki"],
+                        row["device_key_thumbprint"],
+                        row["device_key_thumbprint"],
                         row["requested_ip"],
                         row["requested_user_agent"],
                     ),
@@ -1486,11 +1502,13 @@ def prepare_approved_devices(
     prepared: list[dict[str, Any]] = []
     for index, item in enumerate(devices, start=1):
         device = dict(item)
+        device["has_device_key"] = bool(device.get("device_key_thumbprint"))
         if not show_sensitive:
             device["username"] = redact_username(device.get("username"), index)
             device["device_id"] = redact_device_id(device.get("device_id"), index)
             device["display_name"] = redact_device_id(device.get("display_name"), index)
             device["last_ip"] = redact_ip(device.get("last_ip"), index)
+            device.pop("device_key_thumbprint", None)
         prepared.append(device)
     return prepared
 
@@ -1504,6 +1522,7 @@ def prepare_pending_device_approvals(
     prepared: list[dict[str, Any]] = []
     for index, item in enumerate(approvals, start=1):
         approval = dict(item)
+        approval["has_device_key"] = bool(approval.get("device_key_thumbprint"))
         if not include_internal:
             approval.pop("request_token", None)
         if not show_sensitive:
@@ -1512,6 +1531,7 @@ def prepare_pending_device_approvals(
             approval["display_name"] = redact_device_id(approval.get("display_name"), index)
             approval["requested_ip"] = redact_ip(approval.get("requested_ip"), index)
             approval["requested_user_agent"] = redact_user_agent(approval.get("requested_user_agent"))
+            approval.pop("device_key_thumbprint", None)
         prepared.append(approval)
     return prepared
 

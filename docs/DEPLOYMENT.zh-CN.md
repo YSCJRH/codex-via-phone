@@ -195,6 +195,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 
 审批轮询固定走 `/api/auth/device-approval`，并依赖短时 `httpOnly` cookie。手机端不应拿到 request token URL。
 
+设备一旦批准，后续登录还需要完成一次短时设备密钥 challenge。如果你是在旧的 UUID-only trusted device 记录上升级，这里通常会经历一次重新审批，用来补齐设备密钥。
+
 不要跳过这一步。它属于默认信任边界的一部分。
 
 ## 只读检查脚本

@@ -9,6 +9,14 @@ export type AuthUser = {
 export type AuthActionResult =
   | { success: true }
   | { success: false; error: string; approvalRequired?: false }
+  | {
+      success: false;
+      error: string;
+      challengeRequired: true;
+      challengeId: string;
+      challengeNonce: string;
+      challengeExpiresAt?: string;
+    }
   | { success: false; error: string; approvalRequired: true };
 
 export type AuthSessionPayload = {
@@ -18,6 +26,11 @@ export type AuthSessionPayload = {
   message?: string;
   approvalRequired?: boolean;
   approvalStatus?: string;
+  approvalKind?: string;
+  challengeRequired?: boolean;
+  challengeId?: string;
+  challengeNonce?: string;
+  challengeExpiresAt?: string;
 };
 
 export type AuthStatusPayload = {

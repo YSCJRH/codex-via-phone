@@ -40,6 +40,8 @@ legacy direct 已经不属于默认边界，只保留为迁移检测状态。
 
 设备审批轮询也要收口：默认只走 cookie-backed `/api/auth/device-approval`，不要在 URL、默认 JSON 或截图里暴露 request token。
 
+已批准设备还应绑定 WebCrypto 设备密钥。localStorage UUID 可以继续作为设备记录的标识，但不应再被当作唯一信任根。
+
 Web 访问默认应满足这三点：
 
 - 先经过本机 nginx 代理入口
@@ -62,6 +64,7 @@ Web 访问默认应满足这三点：
 - 把 `tailnet-private` 写成 Funnel 或 tailnet IP 直连
 - 让新设备免审批登录
 - query-token 式审批轮询或 WebSocket 鉴权
+- 在设备密钥升级可用后，仍然只靠 UUID 信任设备
 - 默认公开 token、secret、诊断证据或审批痕迹
 
 ## 面向公开输出的脱敏规则
