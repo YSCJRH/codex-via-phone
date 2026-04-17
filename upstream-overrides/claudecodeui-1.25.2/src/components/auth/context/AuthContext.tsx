@@ -119,12 +119,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const payload = await parseJsonSafely<AuthSessionPayload>(response);
 
         if (!response.ok || !payload?.user) {
-          if (payload?.approvalRequired && payload?.requestToken) {
+          if (payload?.approvalRequired) {
             return {
               success: false,
               error: payload.message || AUTH_ERROR_MESSAGES.deviceApprovalRequired,
               approvalRequired: true,
-              requestToken: payload.requestToken,
             };
           }
           const message = resolveApiErrorMessage(payload, AUTH_ERROR_MESSAGES.loginFailed);

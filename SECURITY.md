@@ -35,7 +35,16 @@ Use `scripts/install-mobile-codex.ps1` as the normal boundary-changing entrypoin
 - mode selection is explicit
 - public-funnel confirmation is explicit
 - persistence intent is explicit
+- browser Origin allowlists are explicit
 - legacy direct state can be blocked instead of silently preserved
+
+Device approval polling should stay on the cookie-backed `/api/auth/device-approval` path. Request tokens should not be exposed in URLs, default JSON, or screenshots.
+
+Web access should stay behind explicit allowlists:
+
+- the app should normally be reached through the local nginx proxy path
+- browser Origins should come from `.runtime/mode-config.json` and reviewed `MOBILE_CODEX_ALLOWED_ORIGINS` overrides
+- legacy direct bindings require explicit `MOBILE_CODEX_ALLOW_LEGACY_DIRECT=true` and are kept only for reviewed migration cases
 
 Read-only inspection and support export should go through scripts that are redacted by default:
 
@@ -52,6 +61,7 @@ The following must not become defaults in docs, scripts, or shipped config:
 - enabling `public-funnel` without explicit confirmation
 - treating `tailnet-private` as if it were Funnel or a direct tailnet IP bind
 - approval-free login for new devices
+- query-token style approval polling or WebSocket auth
 - publishing tokens, secrets, diagnostics evidence, or approval traces by default
 
 ## Public-Safe Output Rules

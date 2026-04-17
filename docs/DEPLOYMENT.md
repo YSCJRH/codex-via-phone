@@ -20,6 +20,7 @@ The installer runs these phases in order:
 8. `emit-redacted-status`
 
 It also writes `.runtime/mode-config.json`, which is the boundary configuration source for the requested and effective access mode.
+That file also carries the reviewed browser Origin allowlist for the current mode.
 
 ## Expected Result
 
@@ -193,6 +194,8 @@ When a new device logs in for the first time:
 4. you approve it on the PC
 5. the phone continues the login flow
 
+The approval poll stays on `/api/auth/device-approval` and uses a short-lived `httpOnly` cookie. The phone should not receive or reuse a request token URL.
+
 Do not skip this. It is part of the default trust boundary.
 
 ## Read-Only Inspection Scripts
@@ -216,6 +219,10 @@ Use these scripts when you want read-only inspection instead of a boundary chang
   Custom Tailscale executable path
 - `MOBILE_CODEX_ASCII_ALIAS`
   Custom ASCII alias path for Windows path compatibility
+- `MOBILE_CODEX_ALLOWED_ORIGINS`
+  Comma-separated reviewed browser Origins to merge into the allowlist
+- `MOBILE_CODEX_ALLOW_LEGACY_DIRECT`
+  Deprecated migration escape hatch for non-loopback HOST binds. Do not use this for normal installs.
 
 ## Fast Troubleshooting Order
 

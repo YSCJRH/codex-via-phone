@@ -98,7 +98,7 @@ if ($publication.mode -ne 'public-funnel') {
   throw 'public-funnel mode is still tailnet-private. Public internet publication was not confirmed by Tailscale.'
 }
 
-Save-MobileCodexModeConfig -RequestedMode 'public-funnel' -EffectiveMode 'public-funnel' -PersistentRemotePublish ([bool]$AllowPersistentRemotePublish) | Out-Null
+Save-MobileCodexModeConfig -RequestedMode 'public-funnel' -EffectiveMode 'public-funnel' -PersistentRemotePublish ([bool]$AllowPersistentRemotePublish) -AllowedOrigins (Get-MobileCodexAllowedOrigins -Mode 'public-funnel' -PublishedUrl $publication.url) | Out-Null
 Update-MobileCodexBindingMode -Mode 'public-funnel' -PreferredUrl $publication.url -PublishedUrl $publication.url
 
 Write-Host 'PUBLIC INTERNET ENTRYPOINT ENABLED' -ForegroundColor Red

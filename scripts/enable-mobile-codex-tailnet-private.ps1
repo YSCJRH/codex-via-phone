@@ -80,7 +80,7 @@ if ($publication.mode -ne 'tailnet-private') {
   throw 'tailnet-private mode unexpectedly resolved to a public Funnel endpoint. Funnel must stay disabled.'
 }
 
-Save-MobileCodexModeConfig -RequestedMode 'tailnet-private' -EffectiveMode 'tailnet-private' -PersistentRemotePublish $false | Out-Null
+Save-MobileCodexModeConfig -RequestedMode 'tailnet-private' -EffectiveMode 'tailnet-private' -PersistentRemotePublish $false -AllowedOrigins (Get-MobileCodexAllowedOrigins -Mode 'tailnet-private' -PublishedUrl $publication.url) | Out-Null
 Update-MobileCodexBindingMode -Mode 'tailnet-private' -PreferredUrl $publication.url -PublishedUrl $publication.url
 
 Write-Output "Mode: tailnet-private"

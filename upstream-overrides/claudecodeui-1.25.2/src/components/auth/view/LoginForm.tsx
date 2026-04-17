@@ -24,7 +24,7 @@ export default function LoginForm() {
   const [formState, setFormState] = useState<LoginFormState>(initialState);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pendingRequestToken, setPendingRequestToken] = useState<string | null>(null);
+  const [pendingApproval, setPendingApproval] = useState(false);
   const [approvalMessage, setApprovalMessage] = useState('');
 
   const updateField = useCallback((field: keyof LoginFormState, value: string) => {
@@ -35,17 +35,23 @@ export default function LoginForm() {
     async (isAutoRetry = false) => {
       const result = await login(formState.username.trim(), formState.password);
       if (!result.success) {
-        if (result.approvalRequired && result.requestToken) {
-          setPendingRequestToken(result.requestToken);
-          setApprovalMessage(isAutoRetry ? '电脑端尚未批准，请稍候...' : result.error);
+        if (result.approvalRequired) {
+          setPendingApproval(true);
+          setApprovalMessage(
+            isAutoRetry
+              ? 'Desktop approval is still pending. Checking again shortly...'
+              : result.error,
+          );
           return;
         }
+
         setErrorMessage(result.error);
-        setPendingRequestToken(null);
+        setPendingApproval(false);
         setApprovalMessage('');
         return;
       }
-      setPendingRequestToken(null);
+
+      setPendingApproval(false);
       setApprovalMessage('');
     },
     [formState.password, formState.username, login],
@@ -56,7 +62,6 @@ export default function LoginForm() {
       event.preventDefault();
       setErrorMessage('');
 
-      // Keep form validation local so each auth screen owns its own UI feedback.
       if (!formState.username.trim() || !formState.password) {
         setErrorMessage(t('login.errors.requiredFields'));
         return;
@@ -70,7 +75,7 @@ export default function LoginForm() {
   );
 
   useEffect(() => {
-    if (!pendingRequestToken) {
+    if (!pendingApproval) {
       return undefined;
     }
 
@@ -85,13 +90,13 @@ export default function LoginForm() {
 
       polling = true;
       try {
-        const response = await api.auth.deviceApprovalStatus(pendingRequestToken);
+        const response = await api.auth.deviceApprovalStatus();
         const payload = await response.json().catch(() => null);
         const status = payload?.approvalStatus;
 
         if (status === 'approved') {
           cancelled = true;
-          setApprovalMessage('电脑端已批准，正在完成登录...');
+          setApprovalMessage('Desktop approved this device. Completing sign-in...');
           setIsSubmitting(true);
           setErrorMessage('');
           await submitLogin(true);
@@ -101,15 +106,23 @@ export default function LoginForm() {
 
         if (status === 'rejected') {
           cancelled = true;
-          setPendingRequestToken(null);
+          setPendingApproval(false);
           setApprovalMessage('');
-          setErrorMessage(payload?.message || '这台设备的登录申请已被电脑端拒绝。');
+          setErrorMessage(payload?.message || 'This device sign-in request was rejected on the desktop.');
           return;
         }
 
-        setApprovalMessage(payload?.message || '等待电脑端批准这台设备...');
+        if (!response.ok || status === 'superseded') {
+          cancelled = true;
+          setPendingApproval(false);
+          setApprovalMessage('');
+          setErrorMessage(payload?.error || payload?.message || 'Approval request expired. Please sign in again.');
+          return;
+        }
+
+        setApprovalMessage(payload?.message || 'Waiting for desktop approval for this device.');
       } catch (error) {
-        setApprovalMessage('正在等待电脑端批准，状态轮询暂时失败，稍后会重试。');
+        setApprovalMessage('Still waiting for desktop approval. Polling will retry automatically.');
       } finally {
         polling = false;
         if (!cancelled) {
@@ -126,13 +139,13 @@ export default function LoginForm() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [pendingRequestToken, submitLogin]);
+  }, [pendingApproval, submitLogin]);
 
   return (
     <AuthScreenLayout
       title={t('login.title')}
       description={t('login.description')}
-      footerText="请输入你的账号和密码，登录后即可控制这台电脑上的 Codex。"
+      footerText="Sign in with your account password. New devices must be approved on the desktop before phone access is allowed."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthInputField
@@ -156,9 +169,9 @@ export default function LoginForm() {
 
         <AuthErrorAlert errorMessage={errorMessage} />
 
-        {pendingRequestToken ? (
+        {pendingApproval ? (
           <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            {approvalMessage || '等待电脑端批准这台设备...'}
+            {approvalMessage || 'Waiting for desktop approval for this device.'}
           </div>
         ) : null}
 

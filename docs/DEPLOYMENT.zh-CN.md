@@ -2,7 +2,7 @@
 
 [中文](DEPLOYMENT.zh-CN.md) | [English](DEPLOYMENT.md)
 
-这份文档面向第一次部署的人。目标是把整套服务跑起来，先守住默认安全边界，再在你明确选择时扩展访问范围。
+这份文档面向第一次部署的人。目标是把整套服务跑起来，先守住默认安全边界，再在你明确选择时扩大访问范围。
 
 ## 推荐安装入口
 
@@ -19,7 +19,7 @@ installer 固定按下面 8 个阶段执行：
 7. `verify`
 8. `emit-redacted-status`
 
-installer 还会写入 `.runtime/mode-config.json`，它是请求模式和生效模式的边界配置源。
+installer 还会写入 `.runtime/mode-config.json`。它既是请求模式和生效模式的边界配置源，也保存当前模式下经审查的 browser Origin allowlist。
 
 ## 目标结果
 
@@ -27,7 +27,7 @@ installer 还会写入 `.runtime/mode-config.json`，它是请求模式和生效
 
 - 在 Windows 电脑上启动本地 Codex 控制栈
 - 在 `http://127.0.0.1:3001` 打开本地面板
-- 在新手机第一次登录时，通过桌面工具完成审批
+- 在新设备第一次登录时，通过桌面工具完成审批
 - 在你明确选择时，启用 `tailnet-private` 或 `public-funnel`
 
 ## 支持的访问模式
@@ -54,14 +54,14 @@ installer 还会写入 `.runtime/mode-config.json`，它是请求模式和生效
 
 ```text
 codex-via-phone/
-├── deploy/
-├── docs/
-├── scripts/
-├── upstream-overrides/
-├── vendor/
-│   └── claudecodeui-1.25.2/
-├── mobile_codex_control.py
-└── requirements.txt
+├─ deploy/
+├─ docs/
+├─ scripts/
+├─ upstream-overrides/
+├─ vendor/
+│  └─ claudecodeui-1.25.2/
+├─ mobile_codex_control.py
+└─ requirements.txt
 ```
 
 ## 第 1 步：准备上游源码
@@ -127,7 +127,7 @@ scripts\launch-mobile-codex-control.cmd
 
 ## 第 6 步：完成首次注册
 
-在电脑浏览器打开：
+在桌面浏览器打开：
 
 ```text
 http://127.0.0.1:3001
@@ -149,7 +149,7 @@ http://127.0.0.1:3001
 
 这是推荐的远程模式。
 
-先确保：
+先确认：
 
 - 电脑已经登录 Tailscale
 - 手机也登录到同一个 tailnet
@@ -181,7 +181,7 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 
 - 桌面工具显示模式为 `public-funnel`
 - 输出里明确出现 `PUBLIC INTERNET ENTRYPOINT`
-- 应用本身仍然在本机 nginx 后面，而不是直接公网裸露
+- 应用本体仍在本机 nginx 后面，而不是直接公网裸露
 
 ## 第 8 步：首次设备审批
 
@@ -192,6 +192,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 3. 你核对设备信息
 4. 你在电脑上批准
 5. 手机继续完成登录流程
+
+审批轮询固定走 `/api/auth/device-approval`，并依赖短时 `httpOnly` cookie。手机端不应拿到 request token URL。
 
 不要跳过这一步。它属于默认信任边界的一部分。
 
@@ -216,11 +218,15 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
   自定义 Tailscale 可执行文件路径
 - `MOBILE_CODEX_ASCII_ALIAS`
   自定义 ASCII alias 路径，用于处理某些 Windows 路径兼容问题
+- `MOBILE_CODEX_ALLOWED_ORIGINS`
+  追加到 allowlist 的经审查 browser Origin，多个值用逗号分隔
+- `MOBILE_CODEX_ALLOW_LEGACY_DIRECT`
+  仅供 legacy direct 迁移场景临时使用；正常安装不要启用
 
 ## 最省时间的排障顺序
 
 1. 先跑 `scripts/check-mobile-codex-runtime.ps1`
-2. 确认电脑浏览器能打开 `http://127.0.0.1:3001`
+2. 确认桌面浏览器能打开 `http://127.0.0.1:3001`
 3. 确认桌面工具里应用和 nginx 都健康
 4. 再测试手机访问
 5. 最后再测试封装 App 或 WebView 壳

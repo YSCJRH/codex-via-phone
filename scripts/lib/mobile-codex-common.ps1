@@ -164,7 +164,95 @@ function Test-MobileCodexLoopbackHost {
   return $Host.Trim().ToLowerInvariant() -in @('127.0.0.1', 'localhost', '::1')
 }
 
+function ConvertTo-MobileCodexOrigin {
+  param(
+    [string]$Value
+  )
+
+  if (-not $Value) {
+    return $null
+  }
+
+  try {
+    $uri = [System.Uri]$Value
+  } catch {
+    return $null
+  }
+
+  if (-not $uri.IsAbsoluteUri) {
+    return $null
+  }
+
+  if ($uri.Scheme -notin @('http', 'https')) {
+    return $null
+  }
+
+  if ($uri.IsDefaultPort) {
+    return ('{0}://{1}' -f $uri.Scheme.ToLowerInvariant(), $uri.Host.ToLowerInvariant())
+  }
+
+  return ('{0}://{1}:{2}' -f $uri.Scheme.ToLowerInvariant(), $uri.Host.ToLowerInvariant(), $uri.Port)
+}
+
+function Get-MobileCodexAllowedOrigins {
+  param(
+    [ValidateSet('localhost', 'tailnet-private', 'public-funnel', 'legacy-direct')]
+    [string]$Mode = 'localhost',
+    [string]$PublishedUrl = $null
+  )
+
+  $origins = New-Object 'System.Collections.Generic.List[string]'
+  $candidates = @(
+    'http://127.0.0.1:3001',
+    'http://localhost:3001',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080'
+  )
+
+  if ($Mode -ne 'localhost' -and $PublishedUrl) {
+    $candidates += $PublishedUrl
+  }
+
+  foreach ($candidate in $candidates) {
+    $normalized = ConvertTo-MobileCodexOrigin -Value $candidate
+    if ($normalized -and (-not $origins.Contains($normalized))) {
+      $null = $origins.Add($normalized)
+    }
+  }
+
+  return @($origins)
+}
+
+function Get-MobileCodexPublishedUrlFromBinding {
+  param(
+    [object]$Binding,
+    [ValidateSet('localhost', 'tailnet-private', 'public-funnel', 'legacy-direct')]
+    [string]$Mode = 'localhost'
+  )
+
+  if (-not $Binding) {
+    return $null
+  }
+
+  $candidates = switch ($Mode) {
+    'tailnet-private' { @($Binding.serveUrl, $Binding.preferredUrl, $Binding.url) }
+    'public-funnel' { @($Binding.funnelUrl, $Binding.preferredUrl, $Binding.url) }
+    'legacy-direct' { @($Binding.preferredUrl, $Binding.url, $Binding.directUrl) }
+    default { @($Binding.preferredUrl, $Binding.url) }
+  }
+
+  foreach ($candidate in $candidates) {
+    $origin = ConvertTo-MobileCodexOrigin -Value ([string]$candidate)
+    if ($origin) {
+      return [string]$candidate
+    }
+  }
+
+  return $null
+}
+
 function Get-MobileCodexModeDefaults {
+  $allowedOrigins = Get-MobileCodexAllowedOrigins -Mode 'localhost'
   return [ordered]@{
     requestedMode = 'localhost'
     effectiveMode = 'localhost'
@@ -172,6 +260,7 @@ function Get-MobileCodexModeDefaults {
     confirmedAt = $null
     confirmedByInstallerVersion = $null
     legacyStateDetected = $false
+    allowedOrigins = @($allowedOrigins)
   }
 }
 
@@ -212,6 +301,15 @@ function Get-MobileCodexModeConfig {
   $confirmedAt = if ($rawConfig.confirmedAt) { [string]$rawConfig.confirmedAt } else { $defaults.confirmedAt }
   $confirmedByInstallerVersion = if ($rawConfig.confirmedByInstallerVersion) { [string]$rawConfig.confirmedByInstallerVersion } else { $defaults.confirmedByInstallerVersion }
   $legacyStateDetected = if ($null -ne $rawConfig.legacyStateDetected) { [bool]$rawConfig.legacyStateDetected } else { $defaults.legacyStateDetected }
+  $allowedOrigins = @()
+  if ($rawConfig -and $rawConfig.PSObject.Properties['allowedOrigins']) {
+    $allowedOrigins = @(
+      @($rawConfig.allowedOrigins) |
+        ForEach-Object { ConvertTo-MobileCodexOrigin -Value ([string]$_) } |
+        Where-Object { $_ } |
+        Select-Object -Unique
+    )
+  }
 
   if ($binding) {
     $bindingMode = ConvertTo-MobileCodexModeName ([string]$binding.mode)
@@ -239,6 +337,11 @@ function Get-MobileCodexModeConfig {
     $legacyStateDetected = $true
   }
 
+  if ($allowedOrigins.Count -eq 0) {
+    $publishedUrl = Get-MobileCodexPublishedUrlFromBinding -Binding $binding -Mode $effectiveMode
+    $allowedOrigins = Get-MobileCodexAllowedOrigins -Mode $effectiveMode -PublishedUrl $publishedUrl
+  }
+
   return [ordered]@{
     requestedMode = if ($requestedMode) { $requestedMode } else { $defaults.requestedMode }
     effectiveMode = if ($effectiveMode) { $effectiveMode } else { $defaults.effectiveMode }
@@ -246,6 +349,7 @@ function Get-MobileCodexModeConfig {
     confirmedAt = $confirmedAt
     confirmedByInstallerVersion = $confirmedByInstallerVersion
     legacyStateDetected = $legacyStateDetected
+    allowedOrigins = @($allowedOrigins)
   }
 }
 
@@ -283,8 +387,20 @@ function Save-MobileCodexModeConfig {
     [ValidateSet('localhost', 'tailnet-private', 'public-funnel', 'legacy-direct')]
     [string]$EffectiveMode,
     [bool]$PersistentRemotePublish = $false,
-    [string]$ConfirmedByInstallerVersion = 'manual-script-v1'
+    [string]$ConfirmedByInstallerVersion = 'manual-script-v1',
+    [string[]]$AllowedOrigins = @()
   )
+
+  $normalizedAllowedOrigins = @(
+    @($AllowedOrigins) |
+      ForEach-Object { ConvertTo-MobileCodexOrigin -Value ([string]$_) } |
+      Where-Object { $_ } |
+      Select-Object -Unique
+  )
+
+  if ($normalizedAllowedOrigins.Count -eq 0) {
+    $normalizedAllowedOrigins = Get-MobileCodexAllowedOrigins -Mode $EffectiveMode
+  }
 
   $config = [ordered]@{
     requestedMode = $RequestedMode
@@ -293,6 +409,7 @@ function Save-MobileCodexModeConfig {
     confirmedAt = (Get-Date).ToString('o')
     confirmedByInstallerVersion = $ConfirmedByInstallerVersion
     legacyStateDetected = ($EffectiveMode -eq 'legacy-direct')
+    allowedOrigins = @($normalizedAllowedOrigins)
   }
 
   Write-MobileCodexJsonObject -Path (Get-MobileCodexModeConfigPath) -Data $config

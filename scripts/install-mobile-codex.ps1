@@ -240,6 +240,7 @@ function Configure-RequestedMode {
     -RequestedMode $RequestedMode `
     -EffectiveMode $RequestedMode `
     -PersistentRemotePublish $PersistentRemotePublish `
+    -AllowedOrigins (Get-MobileCodexAllowedOrigins -Mode $RequestedMode) `
     -ConfirmedByInstallerVersion $installerVersion | Out-Null
   Update-MobileCodexBindingMode -Mode $RequestedMode -PreferredUrl 'http://127.0.0.1:3001'
   [void](Update-AutoStartConfigFromMode -RequestedMode $RequestedMode -PersistentRemotePublish $PersistentRemotePublish)
@@ -278,6 +279,13 @@ function Assert-VerifiedMode {
     throw "mode-config.json effectiveMode is $($currentModeConfig.effectiveMode), expected $RequestedMode."
   }
 
+  $allowedOrigins = @(
+    @($currentModeConfig.allowedOrigins) |
+      ForEach-Object { ConvertTo-MobileCodexOrigin -Value ([string]$_) } |
+      Where-Object { $_ } |
+      Select-Object -Unique
+  )
+
   if (-not $binding) {
     throw 'app-binding.json was not written.'
   }
@@ -287,6 +295,9 @@ function Assert-VerifiedMode {
   }
 
   if ($RequestedMode -eq 'localhost') {
+    if ($allowedOrigins.Count -eq 0) {
+      throw 'mode-config.json allowedOrigins is empty for localhost mode.'
+    }
     if ([string]$binding.remoteVisibility -ne 'localhost') {
       throw "app-binding.json remoteVisibility is $($binding.remoteVisibility), expected localhost."
     }
@@ -314,6 +325,7 @@ function Assert-VerifiedMode {
   }
 
   if ($RequestedMode -eq 'tailnet-private') {
+    $serveOrigin = ConvertTo-MobileCodexOrigin -Value ([string]$binding.serveUrl)
     if ([string]$binding.remoteVisibility -ne 'tailnet-private') {
       throw "tailnet-private mode verification failed: remoteVisibility is $($binding.remoteVisibility)."
     }
@@ -323,14 +335,21 @@ function Assert-VerifiedMode {
     if ($binding.funnelUrl) {
       throw 'tailnet-private mode verification failed: funnelUrl should be empty.'
     }
+    if (-not $serveOrigin -or $serveOrigin -notin $allowedOrigins) {
+      throw 'tailnet-private mode verification failed: mode-config.json allowedOrigins is missing the published HTTPS origin.'
+    }
     return
   }
 
+  $funnelOrigin = ConvertTo-MobileCodexOrigin -Value ([string]$binding.funnelUrl)
   if ([string]$binding.remoteVisibility -ne 'public-funnel') {
     throw "public-funnel mode verification failed: remoteVisibility is $($binding.remoteVisibility)."
   }
   if (-not ([string]$binding.funnelUrl).StartsWith('https://')) {
     throw 'public-funnel mode verification failed: funnelUrl is missing.'
+  }
+  if (-not $funnelOrigin -or $funnelOrigin -notin $allowedOrigins) {
+    throw 'public-funnel mode verification failed: mode-config.json allowedOrigins is missing the published HTTPS origin.'
   }
 }
 

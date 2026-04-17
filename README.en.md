@@ -44,6 +44,8 @@ Phone browser
 - Start in `localhost`
 - Prefer `tailnet-private` over `public-funnel`
 - Require desktop approval for every first-time device
+- Keep approval polling on a cookie-backed path instead of exposing request tokens in URLs
+- Treat the browser Origin allowlist in `.runtime/mode-config.json` as the remote web entry contract
 - Keep hardened mode enabled by default
 - Treat `.runtime/mode-config.json` as the boundary configuration source
 

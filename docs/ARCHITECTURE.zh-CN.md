@@ -6,7 +6,7 @@
 
 ## 一句话理解
 
-把 Codex 留在你自己的 Windows 电脑上本地运行，在前面放 nginx，再让手机通过一个被明确命名的访问模式接入，而不是直接把 Node 应用裸露出去。
+把 Codex 留在你自己的 Windows 电脑上本地运行，在前面放 nginx，再让手机通过被明确命名的访问模式接入，而不是直接把 Node 应用暴露出去。
 
 ## 支持的访问模式
 
@@ -15,7 +15,7 @@
 - `tailnet-private`
   私网模式。通过 Tailscale Serve 把仅 tailnet 可访问的 HTTPS 路由转发到本机 nginx，Funnel 必须保持关闭。
 - `public-funnel`
-  公网模式。通过 Tailscale Funnel 把公网 HTTPS 路由转发到本机 nginx。这属于显式扩大边界，绝不是默认值。
+  公网模式。通过 Tailscale Funnel 把公网 HTTPS 路由转发到本机 nginx。这属于显式扩大边界，不是默认值。
 
 legacy direct 只作为迁移状态保留，已经不再属于默认边界，也不再是公开推荐路线。
 
@@ -28,10 +28,11 @@ legacy direct 只作为迁移状态保留，已经不再属于默认边界，也
 - `requestedMode`
 - `effectiveMode`
 - `persistentRemotePublish`
+- `allowedOrigins`
 - 确认元数据
 - legacy 边界检测状态
 
-正常安装和模式切换都应该通过 `scripts/install-mobile-codex.ps1` 这个受控入口来写入它。
+正常安装和模式切换都应通过 `scripts/install-mobile-codex.ps1` 这个受控入口来写入它。
 
 只读的运维检查则应通过下面这些脚本完成：
 
@@ -43,15 +44,17 @@ legacy direct 只作为迁移状态保留，已经不再属于默认边界，也
 
 ```text
 手机浏览器
-  -> 被明确命名的访问模式（`tailnet-private` 或 `public-funnel`）
+  -> 被明确命名的访问模式（tailnet-private 或 public-funnel）
   -> 本机 nginx
-  -> 已应用本仓覆盖层的本地 claudecodeui
+  -> 应用了本仓覆盖层的本地 claudecodeui
   -> 电脑上的本地 Codex 会话
 ```
 
+浏览器侧也必须命中显式 Origin allowlist。正常情况下，这份 allowlist 来自 `.runtime/mode-config.json`、当前 `app-binding.json` 中的发布 URL，以及经审查的 `MOBILE_CODEX_ALLOWED_ORIGINS` 覆盖项。
+
 ## 为什么默认必须是 `localhost`
 
-因为这个项目最终控制的是你电脑上的本地 Codex 会话，这天然是一个高信任环境。
+因为这个项目最终控制的是你电脑上的本地 Codex 会话，这是天然的高信任环境。
 
 从 `localhost` 开始，有三个直接好处：
 
@@ -63,8 +66,8 @@ legacy direct 只作为迁移状态保留，已经不再属于默认边界，也
 
 `tailnet-private` 是最符合这条主线的远程模式：
 
-- 应用本身仍然保持 localhost-only
-- nginx 继续做唯一的本地入口代理
+- 应用本体仍然保持 localhost-only
+- nginx 继续做唯一的本地入口层
 - HTTPS 路由只对同一 tailnet 内的设备可见
 - 完全不调用 Tailscale Funnel
 
@@ -87,7 +90,7 @@ legacy direct 只作为迁移状态保留，已经不再属于默认边界，也
 在所有受支持的模式里，nginx 都是稳定的入口层：
 
 - 它让 Node 应用继续留在 localhost 后面
-- 它统一处理代理和头部策略
+- 它统一处理代理行为和头部
 - 它让 `tailnet-private` 和 `public-funnel` 在本机都指向同一种目标形态
 
 仓库已经不再把“直接暴露应用”当成正常路线。
@@ -105,6 +108,8 @@ legacy direct 只作为迁移状态保留，已经不再属于默认边界，也
 - 新设备必须等待桌面端批准
 - 电脑主人可以检查待审批请求
 - 只有批准后的设备才会进入可信列表
+
+轮询链路本身也要收口：手机只轮询 `/api/auth/device-approval`，request token 保留在 `httpOnly` cookie 里，不再放进 URL。
 
 ## 记住这四点就够了
 

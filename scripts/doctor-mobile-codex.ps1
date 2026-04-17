@@ -91,6 +91,7 @@ $payload = [ordered]@{
     effectiveMode = [string]$modeConfig.effectiveMode
     persistentRemotePublish = [bool]$modeConfig.persistentRemotePublish
     legacyStateDetected = [bool]$modeConfig.legacyStateDetected
+    allowedOriginCount = @($modeConfig.allowedOrigins).Count
   }
   binding = [ordered]@{
     mode = if ($binding) { [string]$binding.mode } else { $null }

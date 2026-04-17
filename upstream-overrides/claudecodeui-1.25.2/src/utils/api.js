@@ -68,8 +68,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildAuthPayload(username, password)),
     }),
-    deviceApprovalStatus: (requestToken) =>
-      fetch(`/api/auth/device-approval/${encodeURIComponent(requestToken)}`, { credentials: 'same-origin' }),
+    deviceApprovalStatus: () =>
+      fetch('/api/auth/device-approval', { credentials: 'same-origin' }),
     user: () => authenticatedFetch('/api/auth/user'),
     logout: () => authenticatedFetch('/api/auth/logout', { method: 'POST' }),
   },

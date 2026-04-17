@@ -2,38 +2,38 @@
 
 [中文](README.md) | [English](README.en.md)
 
-`codex-via-phone` 是一个自托管辅助层，用来把你 Windows 电脑上本地运行的 Codex 会话，变成可以在手机上查看、续接、审批和同步的私有入口。
+`codex-via-phone` 是一个自托管辅助层，用来让你通过手机访问、查看、续接、审批和同步运行在 Windows 电脑上的本地 Codex 会话。
 
-它面向的是一条很明确的使用路径：
+它服务的是一条很明确的使用路径：
 
 - Codex 运行在你自己的 Windows 电脑上
-- 你想用手机查看项目、线程和消息
-- 你想从手机发下一条提示词，让电脑继续跑本地 Codex 会话
-- 你希望新手机第一次登录时，必须经过桌面端审批
+- 你希望用手机查看项目、会话和消息
+- 你希望从手机发送下一条提示词，让电脑继续本地 Codex 会话
+- 你希望每台新设备第一次登录时，都先经过桌面端审批
 
 ## 你可以用它做什么
 
-- 在手机浏览器里查看 Codex 项目和线程
-- 在手机上续接一个已经存在的 Codex 会话
+- 在手机浏览器里查看 Codex 项目和会话
+- 从手机续接一个已有的 Codex 会话
 - 在桌面控制工具里批准新手机的首次登录
 - 在 Windows 桌面控制工具里查看本地服务状态、访问模式和设备审批状态
 
 ## 访问模式
 
 - `localhost`
-  默认模式，也是推荐起点。应用只绑定到 `127.0.0.1`，先在本机把流程跑通。
+  默认模式，也是推荐起点。应用保持绑定在 `127.0.0.1`，先把本机链路验证好。
 - `tailnet-private`
-  推荐的远程模式。通过 Tailscale Serve 提供仅 tailnet 可访问的 HTTPS 入口，流量先到本机 nginx，应用本身仍保持 localhost-only。
+  推荐的远程模式。Tailscale Serve 提供仅 tailnet 可访问的 HTTPS 入口，请求先到本机 nginx，应用本体仍保持 localhost-only。
 - `public-funnel`
-  危险模式。通过 Tailscale Funnel 提供公网 HTTPS 入口，流量先到本机 nginx。这个模式必须显式开启，绝不能当默认值。
+  危险模式。Tailscale Funnel 提供公网 HTTPS 入口，请求先到本机 nginx。它必须显式开启，绝不能成为默认值。
 
 ## 推荐架构
 
 ```text
 手机浏览器
-  -> Tailscale HTTPS 入口
+  -> 具名访问模式
   -> 本机 nginx
-  -> 已应用本仓覆盖层的本地 claudecodeui
+  -> 应用了本仓覆盖层的本地 claudecodeui
   -> 电脑上的本地 Codex 会话
 ```
 
@@ -42,8 +42,10 @@
 - 让应用保持绑定在 `127.0.0.1`
 - 在应用前面放 nginx
 - 默认从 `localhost` 开始
-- 如需远程访问，优先使用 `tailnet-private`
-- 每台新设备第一次登录都要桌面审批
+- 需要远程访问时，优先使用 `tailnet-private`
+- 每台新设备第一次登录都必须经过桌面审批
+- 审批轮询固定走 cookie-backed `/api/auth/device-approval`，不在 URL 中暴露 request token
+- 浏览器 Origin 白名单以 `.runtime/mode-config.json` 为准
 - 默认保持 hardened mode 开启
 - 把 `.runtime/mode-config.json` 视为边界配置源
 
@@ -69,13 +71,13 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 python mobile_codex_control.py
 ```
 
-6. 在电脑浏览器打开本地页面：
+6. 在桌面浏览器打开本地页面：
 
 ```text
 http://127.0.0.1:3001
 ```
 
-7. 只有在你明确要让手机接入时，再选择一种访问模式：
+7. 只有在你明确需要手机接入时，再选择访问模式：
 
 ```powershell
 # 推荐：tailnet-private HTTPS 模式
@@ -85,7 +87,7 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode public-funnel -Yes -EmitRedactedStatus
 ```
 
-8. 用手机首次登录，并在桌面端批准该设备。
+8. 用手机首次登录，并在桌面端审批该设备。
 
 ## 只读运维脚本
 
@@ -96,7 +98,7 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 - `scripts/export-mobile-codex-support-bundle.ps1`
   默认脱敏的支持包导出
 - `scripts/export-mobile-codex-audit.ps1`
-  兼容包装脚本，默认同样导出脱敏支持包
+  兼容包装脚本，默认仍导出同样的脱敏支持包
 
 ## 文档
 
@@ -110,8 +112,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 
 如果你准备发布自己的 fork，请先阅读 `docs/PRIVATE_LOCAL_ONLY.zh-CN.md` 和 `docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md`，再组装 staging 发布副本。
 
-公开发布应当来自脱敏后的 staging 副本，并通过 `Open Source Gate` 工作流和 `scripts/check-open-source-tree.ps1` 检查。
+公开发布应来自脱敏后的 staging 副本，并通过 `Open Source Gate` 工作流和 `scripts/check-open-source-tree.ps1` 检查。
 
 ## 致谢
 
-本项目建立在上游 [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) 的基础上，定位是一个更聚焦的辅助层，重点服务于手机访问、可信设备审批，以及本地 Codex 工作流的更安全接入。
+本项目建立在上游 [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) 的基础上，定位是一层更聚焦的辅助层，重点服务于手机访问、可信设备审批，以及本地 Codex 工作流的更安全接入。

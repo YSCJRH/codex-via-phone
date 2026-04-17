@@ -5,8 +5,11 @@ import { userDb, db, trustedDevicesDb } from '../database/db.js';
 import {
   authenticateToken,
   clearAuthCookie,
+  clearPendingApprovalCookie,
   generateToken,
+  getPendingApprovalTokenFromRequest,
   setAuthCookie,
+  setPendingApprovalCookie,
 } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -43,10 +46,12 @@ const getDeviceMetadataFromRequest = (req) => ({
   userAgent: normalizeTextField(req.headers['user-agent'], 512),
 });
 
-const buildApprovalPayload = (request, message = '新设备需要在电脑端批准后才能登录。') => ({
+const buildApprovalPayload = (
+  request,
+  message = 'This device must be approved on the desktop before it can sign in.',
+) => ({
   success: false,
   approvalRequired: true,
-  requestToken: request.request_token,
   approvalStatus: request.status,
   message,
   deviceName: request.device_name || request.device_id,
@@ -58,7 +63,9 @@ const issueAuthSession = (req, res, user, deviceMetadata = null) => {
     deviceName: deviceMetadata?.deviceName || null,
     appType: deviceMetadata?.appType || null,
   });
+
   setAuthCookie(res, token, req);
+  clearPendingApprovalCookie(res, req);
 
   return {
     success: true,
@@ -67,30 +74,34 @@ const issueAuthSession = (req, res, user, deviceMetadata = null) => {
   };
 };
 
-// Check auth status and setup requirements
 router.get('/status', async (req, res) => {
   try {
     const hasUsers = await userDb.hasUsers();
-    res.json({ 
+    res.json({
       needsSetup: !hasUsers,
-      isAuthenticated: false // Will be overridden by frontend if token exists
+      isAuthenticated: false,
     });
   } catch (error) {
     console.error('Auth status error:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    res.status(500).json({ error: 'Server internal error' });
   }
 });
 
-router.get('/device-approval/:requestToken', async (req, res) => {
+router.get('/device-approval', async (req, res) => {
   try {
-    const requestToken = normalizeTextField(req.params.requestToken, 128);
+    const requestToken = normalizeTextField(getPendingApprovalTokenFromRequest(req), 128);
     if (!requestToken) {
-      return res.status(400).json({ error: '审批令牌无效' });
+      return res.status(400).json({ error: 'Approval request expired. Please sign in again.' });
     }
 
     const request = trustedDevicesDb.getApprovalRequestByToken(requestToken);
     if (!request) {
-      return res.status(404).json({ error: '未找到对应的审批申请' });
+      clearPendingApprovalCookie(res, req);
+      return res.status(404).json({ error: 'No matching approval request was found.' });
+    }
+
+    if (request.status === 'rejected' || request.status === 'superseded') {
+      clearPendingApprovalCookie(res, req);
     }
 
     return res.json({
@@ -98,105 +109,98 @@ router.get('/device-approval/:requestToken', async (req, res) => {
       approvalStatus: request.status,
       message:
         request.status === 'approved'
-          ? '设备已获批准，请重新完成登录。'
+          ? 'Device approved. Please complete sign-in again.'
           : request.status === 'rejected'
-            ? '这台设备的登录申请已被电脑端拒绝。'
-            : '等待电脑端批准这台设备。',
+            ? 'This device request was rejected on the desktop.'
+            : request.status === 'superseded'
+              ? 'This device request was replaced. Please sign in again.'
+              : 'Waiting for desktop approval for this device.',
     });
   } catch (error) {
     console.error('Device approval status error:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    res.status(500).json({ error: 'Server internal error' });
   }
 });
 
-// User registration (setup) - only allowed if no users exist
 router.post('/register', async (req, res) => {
   try {
     const { username, password } = req.body;
     const deviceMetadata = getDeviceMetadataFromRequest(req);
-    
-    // Validate input
+
     if (!username || !password) {
-      return res.status(400).json({ error: '请输入用户名和密码' });
+      return res.status(400).json({ error: 'Please provide both username and password.' });
     }
-    
+
     if (username.length < 3 || password.length < 6) {
-      return res.status(400).json({ error: '用户名至少 3 个字符，密码至少 6 个字符' });
+      return res.status(400).json({ error: 'Username must be at least 3 characters and password at least 6 characters.' });
     }
-    
-    // Use a transaction to prevent race conditions
+
     db.prepare('BEGIN').run();
     try {
-      // Check if users already exist (only allow one user)
       const hasUsers = userDb.hasUsers();
       if (hasUsers) {
         db.prepare('ROLLBACK').run();
-        return res.status(403).json({ error: '用户已存在。当前系统仅允许单用户使用。' });
+        return res.status(403).json({ error: 'A user already exists. This installation supports a single account only.' });
       }
-      
-      // Hash password
+
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(password, saltRounds);
-      
-      // Create user
       const user = userDb.createUser(username, passwordHash);
 
       if (deviceMetadata.deviceId) {
         trustedDevicesDb.approveDevice(user.id, deviceMetadata.deviceId, deviceMetadata);
       }
-      
+
       db.prepare('COMMIT').run();
-
-      // Update last login (non-fatal, outside transaction)
       userDb.updateLastLogin(user.id);
-
       res.json(issueAuthSession(req, res, user, deviceMetadata.deviceId ? deviceMetadata : null));
     } catch (error) {
       db.prepare('ROLLBACK').run();
       throw error;
     }
-    
   } catch (error) {
     console.error('Registration error:', error);
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      res.status(409).json({ error: '用户名已存在' });
+      res.status(409).json({ error: 'Username already exists.' });
     } else {
-      res.status(500).json({ error: '服务器内部错误' });
+      res.status(500).json({ error: 'Server internal error' });
     }
   }
 });
 
-// User login
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     const deviceMetadata = getDeviceMetadataFromRequest(req);
-    
-    // Validate input
+
     if (!username || !password) {
-      return res.status(400).json({ error: '请输入用户名和密码' });
+      return res.status(400).json({ error: 'Please provide both username and password.' });
     }
 
     if (!deviceMetadata.deviceId) {
-      return res.status(400).json({ error: '当前客户端没有发送设备标识，请刷新后重试。' });
+      return res.status(400).json({ error: 'This client did not send a device identifier. Refresh and try again.' });
     }
-    
-    // Get user from database
+
     const user = userDb.getUserByUsername(username);
     if (!user) {
-      return res.status(401).json({ error: '用户名或密码错误' });
+      return res.status(401).json({ error: 'Invalid username or password.' });
     }
-    
-    // Verify password
+
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
-      return res.status(401).json({ error: '用户名或密码错误' });
+      return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
     const approvedDevice = trustedDevicesDb.getApprovedDevice(user.id, deviceMetadata.deviceId);
     if (!approvedDevice) {
       const requestToken = crypto.randomBytes(24).toString('hex');
-      const request = trustedDevicesDb.createOrRefreshPendingApproval(user.id, deviceMetadata.deviceId, requestToken, deviceMetadata);
+      const request = trustedDevicesDb.createOrRefreshPendingApproval(
+        user.id,
+        deviceMetadata.deviceId,
+        requestToken,
+        deviceMetadata,
+      );
+      setPendingApprovalCookie(res, request.request_token, req);
       return res.status(202).json(buildApprovalPayload(request));
     }
 
@@ -204,28 +208,24 @@ router.post('/login', async (req, res) => {
       ...deviceMetadata,
       updateLogin: true,
     });
-    
-    // Update last login
+
     userDb.updateLastLogin(user.id);
-    
     res.json(issueAuthSession(req, res, user, deviceMetadata));
-    
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    res.status(500).json({ error: 'Server internal error' });
   }
 });
 
-// Get current user (protected route)
 router.get('/user', authenticateToken, (req, res) => {
   res.json({
-    user: sanitizeUser(req.user)
+    user: sanitizeUser(req.user),
   });
 });
 
-// Logout should always clear the auth cookie, even if the current token is already invalid.
 router.post('/logout', (req, res) => {
   clearAuthCookie(res, req);
+  clearPendingApprovalCookie(res, req);
   res.json({ success: true, message: 'Logged out successfully' });
 });
 

@@ -28,6 +28,7 @@ It stores:
 - `requestedMode`
 - `effectiveMode`
 - `persistentRemotePublish`
+- `allowedOrigins`
 - confirmation metadata
 - legacy boundary detection state
 
@@ -48,6 +49,8 @@ Phone browser
   -> local claudecodeui with this repository's overrides
   -> local Codex sessions
 ```
+
+The browser side is expected to arrive through an explicit Origin allowlist. In normal operation that allowlist is assembled from `.runtime/mode-config.json`, the current published app-binding URLs, and any reviewed `MOBILE_CODEX_ALLOWED_ORIGINS` override.
 
 ## Why `localhost` Is the Default
 
@@ -105,6 +108,8 @@ With it:
 - a new device must wait for desktop approval
 - the owner can inspect the pending request
 - only approved devices move into the trusted list
+
+The polling side of that flow should stay cookie-backed. The phone should ask `/api/auth/device-approval` for status, while the request token itself stays in an `httpOnly` cookie instead of being exposed in the URL.
 
 ## Keep These Four Points in Mind
 

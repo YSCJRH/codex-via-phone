@@ -9,7 +9,7 @@ export type AuthUser = {
 export type AuthActionResult =
   | { success: true }
   | { success: false; error: string; approvalRequired?: false }
-  | { success: false; error: string; approvalRequired: true; requestToken: string };
+  | { success: false; error: string; approvalRequired: true };
 
 export type AuthSessionPayload = {
   token?: string;
@@ -17,7 +17,6 @@ export type AuthSessionPayload = {
   error?: string;
   message?: string;
   approvalRequired?: boolean;
-  requestToken?: string;
   approvalStatus?: string;
 };
 

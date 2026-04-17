@@ -426,112 +426,152 @@ function isLoopbackAddress(address) {
         || normalizedAddress === '::1';
 }
 
-function isTailscaleAddress(address) {
-    if (!address || typeof address !== 'string') {
-        return false;
-    }
+const RUNTIME_DIR = path.join(__dirname, '..', '.runtime');
+const MODE_CONFIG_PATH = path.join(RUNTIME_DIR, 'mode-config.json');
+const APP_BINDING_PATH = path.join(RUNTIME_DIR, 'app-binding.json');
+const ORIGIN_CACHE_TTL_MS = 1000;
+let cachedAllowedOrigins = {
+    expiresAt: 0,
+    origins: new Set(),
+};
 
-    const normalizedAddress = address
-        .replace(/^\[|\]$/g, '')
-        .replace(/^::ffff:/, '')
-        .split('%')[0]
-        .toLowerCase();
-
-    return /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(normalizedAddress)
-        || normalizedAddress.startsWith('fd7a:115c:a1e0:');
-}
-
-function extractHostnameFromHostHeader(hostHeader) {
-    if (!hostHeader || typeof hostHeader !== 'string') {
-        return '';
-    }
-
-    const firstHost = hostHeader.split(',')[0].trim();
-    if (!firstHost) {
-        return '';
+function normalizeOriginValue(value) {
+    if (!value || typeof value !== 'string') {
+        return null;
     }
 
     try {
-        return new URL(`http://${firstHost}`).hostname.toLowerCase();
+        const parsed = new URL(value);
+        const protocol = parsed.protocol.toLowerCase();
+        if (protocol !== 'http:' && protocol !== 'https:') {
+            return null;
+        }
+
+        return parsed.origin.toLowerCase();
     } catch {
-        return '';
+        return null;
     }
 }
 
-function isTrustedCorsOrigin(origin, req) {
+function readRuntimeJsonFile(runtimePath) {
+    try {
+        if (!fs.existsSync(runtimePath)) {
+            return null;
+        }
+
+        return JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function collectAllowedOrigins() {
+    const origins = new Set();
+    const addOrigin = (candidate) => {
+        const normalized = normalizeOriginValue(candidate);
+        if (normalized) {
+            origins.add(normalized);
+        }
+    };
+
+    for (const localOrigin of [
+        'http://127.0.0.1:3001',
+        'http://localhost:3001',
+        'http://[::1]:3001',
+        'http://127.0.0.1:8080',
+        'http://localhost:8080',
+        'http://[::1]:8080',
+    ]) {
+        addOrigin(localOrigin);
+    }
+
+    const modeConfig = readRuntimeJsonFile(MODE_CONFIG_PATH);
+    const appBinding = readRuntimeJsonFile(APP_BINDING_PATH);
+
+    if (Array.isArray(modeConfig?.allowedOrigins)) {
+        for (const candidate of modeConfig.allowedOrigins) {
+            addOrigin(candidate);
+        }
+    }
+
+    for (const candidate of [
+        appBinding?.funnelUrl,
+        appBinding?.serveUrl,
+        appBinding?.preferredUrl,
+        appBinding?.url,
+    ]) {
+        addOrigin(candidate);
+    }
+
+    const extraOrigins = String(process.env.MOBILE_CODEX_ALLOWED_ORIGINS || '')
+        .split(/[,\r\n ]+/)
+        .filter(Boolean);
+    for (const candidate of extraOrigins) {
+        addOrigin(candidate);
+    }
+
+    return origins;
+}
+
+function getAllowedOriginsSnapshot() {
+    const now = Date.now();
+    if (cachedAllowedOrigins.expiresAt > now) {
+        return cachedAllowedOrigins.origins;
+    }
+
+    cachedAllowedOrigins = {
+        expiresAt: now + ORIGIN_CACHE_TTL_MS,
+        origins: collectAllowedOrigins(),
+    };
+    return cachedAllowedOrigins.origins;
+}
+
+function isAllowedOrigin(origin) {
+    const normalized = normalizeOriginValue(origin);
+    if (!normalized) {
+        return false;
+    }
+
+    return getAllowedOriginsSnapshot().has(normalized);
+}
+
+function isTrustedProxyRequest(req) {
+    const remoteAddress = req.socket?.remoteAddress || req.ip || '';
+    return isLoopbackAddress(remoteAddress);
+}
+
+function isLegacyDirectAccessAllowed() {
+    return LEGACY_DIRECT_BINDING_ALLOWED;
+}
+
+function isTrustedCorsOrigin(origin) {
     if (!origin) {
         return true;
     }
 
-    try {
-        const parsed = new URL(origin);
-        const hostname = parsed.hostname.toLowerCase();
-        const protocol = parsed.protocol.toLowerCase();
-
-        if (protocol !== 'http:' && protocol !== 'https:') {
-            return false;
-        }
-
-        if (isLoopbackHostname(hostname)) {
-            return true;
-        }
-
-        const forwardedHostHeader = Array.isArray(req.headers['x-forwarded-host'])
-            ? req.headers['x-forwarded-host'][0]
-            : req.headers['x-forwarded-host'];
-        const requestHostname = extractHostnameFromHostHeader(
-            forwardedHostHeader || req.headers.host || ''
-        );
-
-        if (requestHostname && hostname === requestHostname) {
-            return true;
-        }
-
-        const forwardedForHeader = Array.isArray(req.headers['x-forwarded-for'])
-            ? req.headers['x-forwarded-for'][0]
-            : req.headers['x-forwarded-for'];
-        const forwardedAddress = typeof forwardedForHeader === 'string'
-            ? forwardedForHeader.split(',')[0].trim()
-            : '';
-        const remoteAddress = req.socket?.remoteAddress || req.ip || '';
-        if (
-            hostname.endsWith('.ts.net')
-            && (
-                isLoopbackAddress(remoteAddress)
-                || isTailscaleAddress(remoteAddress)
-                || isTailscaleAddress(forwardedAddress)
-            )
-        ) {
-            return true;
-        }
-    } catch {
-        return false;
-    }
-
-    return false;
+    return isAllowedOrigin(origin);
 }
 
 function isTrustedRemoteRequest(req) {
-    const forwardedForHeader = Array.isArray(req.headers['x-forwarded-for'])
-        ? req.headers['x-forwarded-for'][0]
-        : req.headers['x-forwarded-for'];
-    const forwardedAddress = typeof forwardedForHeader === 'string'
-        ? forwardedForHeader.split(',')[0].trim()
-        : '';
-    const remoteAddress = req.socket?.remoteAddress || req.ip || '';
+    return isTrustedProxyRequest(req) || isLegacyDirectAccessAllowed();
+}
 
-    return (
-        isLoopbackAddress(remoteAddress)
-        || isTailscaleAddress(remoteAddress)
-        || isLoopbackAddress(forwardedAddress)
-        || isTailscaleAddress(forwardedAddress)
-    );
+function isTrustedWebSocketOrigin(req) {
+    const origin = Array.isArray(req.headers.origin)
+        ? req.headers.origin[0]
+        : req.headers.origin;
+
+    if (!origin) {
+        return isTrustedProxyRequest(req);
+    }
+
+    return isAllowedOrigin(origin);
 }
 
 const corsOptionsDelegate = (req, callback) => {
     const origin = req.header('Origin');
 
-    if (isTrustedCorsOrigin(origin, req)) {
+    if (isTrustedCorsOrigin(origin)) {
         return callback(null, {
             credentials: true,
             origin: true,
@@ -561,13 +601,33 @@ const wss = new WebSocketServer({
             },
         });
 
-        if (!isTrustedRemoteRequest(info.req)) {
-            console.log('[WARN] WebSocket rejected due to untrusted remote address');
+        if (!isTrustedWebSocketOrigin(info.req)) {
+            const origin = Array.isArray(info.req.headers.origin)
+                ? info.req.headers.origin[0]
+                : info.req.headers.origin;
+            console.log('[WARN] WebSocket rejected due to untrusted origin');
             void recordConnectivityEvent({
                 surface: 'server',
                 event: 'ws_connect_rejected',
                 detail: {
-                    reason: 'untrusted_remote_address',
+                    reason: 'origin_not_allowlisted',
+                    origin: origin || null,
+                    url: info.req.url || null,
+                },
+            });
+            return false;
+        }
+
+        if (!isTrustedRemoteRequest(info.req)) {
+            const reason = isLegacyDirectAccessAllowed()
+                ? 'legacy_direct_origin_required'
+                : 'untrusted_proxy_hop';
+            console.log('[WARN] WebSocket rejected due to untrusted request path');
+            void recordConnectivityEvent({
+                surface: 'server',
+                event: 'ws_connect_rejected',
+                detail: {
+                    reason,
                     url: info.req.url || null,
                     remoteAddress: info.req.socket?.remoteAddress || null,
                 },
@@ -646,7 +706,9 @@ app.use((req, res, next) => {
     }
 
     return res.status(403).json({
-        error: 'Access is limited to local or Tailscale clients'
+        error: isLegacyDirectAccessAllowed()
+            ? 'Access requires an allowlisted Origin in legacy direct mode.'
+            : 'Access is limited to the local proxy path.'
     });
 });
 app.use(cors(corsOptionsDelegate));
@@ -3142,6 +3204,14 @@ const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || (CODEX_ONLY_HARDENED_MODE ? '127.0.0.1' : '0.0.0.0');
 // Show localhost in URL when binding to all interfaces (0.0.0.0 isn't a connectable address)
 const DISPLAY_HOST = HOST === '0.0.0.0' ? 'localhost' : HOST;
+const LEGACY_DIRECT_BINDING_REQUESTED = !isLoopbackHostname(HOST);
+const LEGACY_DIRECT_BINDING_ALLOWED = LEGACY_DIRECT_BINDING_REQUESTED && process.env.MOBILE_CODEX_ALLOW_LEGACY_DIRECT === 'true';
+
+if (LEGACY_DIRECT_BINDING_REQUESTED && !LEGACY_DIRECT_BINDING_ALLOWED) {
+    console.error('[ERROR] Direct HOST bindings are deprecated in codex-via-phone.');
+    console.error('[ERROR] Return to localhost mode, or set MOBILE_CODEX_ALLOW_LEGACY_DIRECT=true only for a reviewed migration path.');
+    process.exit(5);
+}
 
 // Initialize database and start server
 async function startServer() {
@@ -3158,6 +3228,9 @@ async function startServer() {
         console.log(`${c.info('[INFO]')} Using Claude Agents SDK for Claude integration`);
         if (CODEX_ONLY_HARDENED_MODE) {
             console.log(`${c.warn('[WARN]')} Codex-only hardened mode is enabled; shell, plugins, updates, agent API, and non-Codex providers are blocked`);
+        }
+        if (LEGACY_DIRECT_BINDING_ALLOWED) {
+            console.log(`${c.warn('[WARN]')} Legacy direct HOST binding is enabled. This path is deprecated and should be migrated back to localhost or a reviewed named mode.`);
         }
         console.log(`${c.info('[INFO]')} Running in ${c.bright(isProduction ? 'PRODUCTION' : 'DEVELOPMENT')} mode`);
 

@@ -4,9 +4,10 @@ import { IS_PLATFORM } from '../constants/config.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || appConfigDb.getOrCreateJwtSecret();
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'codex_auth';
+const PENDING_APPROVAL_COOKIE_NAME = process.env.PENDING_APPROVAL_COOKIE_NAME || 'codex_pending_approval';
 const TOKEN_LIFETIME = '7d';
 const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-const ALLOW_WEBSOCKET_QUERY_TOKEN = process.env.ALLOW_WEBSOCKET_QUERY_TOKEN === 'true';
+const PENDING_APPROVAL_COOKIE_MAX_AGE_MS = 30 * 60 * 1000;
 
 const parseCookieHeader = (cookieHeader) => {
   if (!cookieHeader) {
@@ -37,15 +38,6 @@ const getBearerTokenFromRequest = (req) => {
     : null;
 };
 
-const getQueryTokenFromRequest = (req) => {
-  try {
-    const requestUrl = new URL(req.url, 'http://localhost');
-    return requestUrl.searchParams.get('token') || null;
-  } catch {
-    return null;
-  }
-};
-
 const isSecureRequest = (req) => {
   if (process.env.AUTH_COOKIE_SECURE === 'true') {
     return true;
@@ -67,6 +59,14 @@ const getAuthCookieOptions = (req) => ({
   path: '/',
 });
 
+const getPendingApprovalCookieOptions = (req) => ({
+  httpOnly: true,
+  sameSite: 'strict',
+  secure: isSecureRequest(req),
+  maxAge: PENDING_APPROVAL_COOKIE_MAX_AGE_MS,
+  path: '/api/auth/device-approval',
+});
+
 const sanitizeUser = (user) => ({
   id: user.id,
   username: user.username,
@@ -77,8 +77,17 @@ const getAuthTokenFromRequest = (req) => {
   return cookies[AUTH_COOKIE_NAME] || getBearerTokenFromRequest(req) || null;
 };
 
+const getPendingApprovalTokenFromRequest = (req) => {
+  const cookies = parseCookieHeader(req.headers.cookie);
+  return cookies[PENDING_APPROVAL_COOKIE_NAME] || null;
+};
+
 const setAuthCookie = (res, token, req) => {
   res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+};
+
+const setPendingApprovalCookie = (res, token, req) => {
+  res.cookie(PENDING_APPROVAL_COOKIE_NAME, token, getPendingApprovalCookieOptions(req));
 };
 
 const clearAuthCookie = (res, req) => {
@@ -87,6 +96,15 @@ const clearAuthCookie = (res, req) => {
     sameSite: 'strict',
     secure: isSecureRequest(req),
     path: '/',
+  });
+};
+
+const clearPendingApprovalCookie = (res, req) => {
+  res.clearCookie(PENDING_APPROVAL_COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: isSecureRequest(req),
+    path: '/api/auth/device-approval',
   });
 };
 
@@ -230,8 +248,7 @@ const authenticateWebSocket = (token) => {
 
 const authenticateWebSocketRequest = (req) => {
   const authToken = getAuthTokenFromRequest(req);
-  const queryToken = ALLOW_WEBSOCKET_QUERY_TOKEN ? getQueryTokenFromRequest(req) : null;
-  return authenticateWebSocket(authToken || queryToken);
+  return authenticateWebSocket(authToken);
 };
 
 export {
@@ -241,8 +258,11 @@ export {
   authenticateWebSocket,
   authenticateWebSocketRequest,
   clearAuthCookie,
+  clearPendingApprovalCookie,
   generateToken,
   getAuthTokenFromRequest,
+  getPendingApprovalTokenFromRequest,
   setAuthCookie,
+  setPendingApprovalCookie,
   validateApiKey,
 };

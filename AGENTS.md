@@ -20,6 +20,8 @@ Use it when a user asks to install, bootstrap, verify, or explain this repositor
 - `tailnet-private` means Tailscale Serve HTTPS tailnet-only -> local nginx -> localhost app. It must not call Funnel.
 - `public-funnel` means Tailscale Funnel HTTPS -> local nginx -> localhost app. It is a public internet entrypoint and requires explicit confirmation.
 - Do not stitch together deprecated scripts such as `enable-mobile-codex-remote.ps1` or `*tailnet-direct*.ps1` for normal installation.
+- Treat `.runtime/mode-config.json` as the boundary source for both mode and reviewed browser Origins.
+- Approval polling is cookie-backed at `/api/auth/device-approval`; do not rely on request-token URLs.
 - Do not show personal hostnames, private IPs, request tokens, device IDs, Windows usernames, or absolute local paths by default.
 
 ## Current Install Workflow
@@ -65,6 +67,7 @@ Use it when a user asks to install, bootstrap, verify, or explain this repositor
 - Do not enable `tailnet-private` or `public-funnel` silently.
 - Do not enable autostart or persistent public exposure unless the user explicitly asks.
 - Do not enable `public-funnel` without `-Yes`.
+- Do not set `MOBILE_CODEX_ALLOW_LEGACY_DIRECT=true` unless the user explicitly asks for a reviewed migration path.
 - Verify the desktop browser flow before testing phone access.
 
 ## Verification Checklist

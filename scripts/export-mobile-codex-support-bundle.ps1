@@ -58,6 +58,7 @@ if ($modeConfig) {
       effectiveMode = [string]$modeConfig.effectiveMode
       persistentRemotePublish = [bool]$modeConfig.persistentRemotePublish
       legacyStateDetected = [bool]$modeConfig.legacyStateDetected
+      allowedOriginCount = @($modeConfig.allowedOrigins).Count
     } | ConvertTo-Json -Depth 4) | Set-Content -Path (Join-Path $targetDir 'mode-config.json') -Encoding UTF8
 }
 
