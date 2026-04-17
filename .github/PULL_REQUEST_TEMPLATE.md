@@ -1,46 +1,45 @@
-# 变更说明
+# 边界变化说明
 
-请用几句话说明这次改动做了什么、为什么要改。
+请说明这次改动是否改变了默认安全边界、访问模式、发布面，或者只是边界收口。
 
-## 变更类型
+## 计划修改的文件
 
-- [ ] Bug 修复
-- [ ] 文档改进
-- [ ] 部署脚本改进
-- [ ] 安全加固
-- [ ] 功能增强
-- [ ] 重构
+请列出本次主要改动文件。
 
-## 你做了哪些验证
+## 具体改动
 
-- [ ] 本地手动验证过
-- [ ] 运行过相关脚本语法检查
-- [ ] 运行过 `python -m py_compile mobile_codex_control.py`
-- [ ] 运行过 `scripts/check-open-source-tree.ps1`
-- [ ] 运行过 `scripts/smoke-test-override-flow.ps1`
+请说明这次改动做了什么，以及为什么这样改。
+
+## 风险回归点
+
+请列出：
+
+- 可能影响的旧行为
+- 兼容性风险
+- 是否存在 legacy 状态迁移成本
+
+## 验证步骤
+
+- [ ] 本地手动验证
+- [ ] 运行相关脚本语法检查
+- [ ] 运行 `python -m py_compile mobile_codex_control.py`
+- [ ] 运行 `scripts/check-open-source-tree.ps1`
+- [ ] 运行 `scripts/smoke-test-override-flow.ps1`（如适用）
 
 请补充必要的验证说明：
 
 ```text
 例如：
-- 在干净上游 v1.25.2 上应用覆盖成功
-- Windows 11 + Node 22 环境启动正常
+- 默认启动后只监听 127.0.0.1
+- tailnet-private 未调用 Funnel
+- public-funnel 需要显式确认
 ```
 
-## 安全检查
-
-- [ ] 没有提交真实 secret、数据库、日志或打包产物
-- [ ] 没有引入新的公网暴露默认行为
-- [ ] 如果改动了认证/设备审批逻辑，已说明风险和回滚方式
-
-## 文档同步
+## 文档同步点
 
 - [ ] README 已同步
-- [ ] 部署文档已同步
-- [ ] 安全文档已同步
-- [ ] 不需要同步文档
-
-## 额外说明
-
-需要维护者重点关注的地方写在这里。
-
+- [ ] DEPLOYMENT 已同步
+- [ ] ARCHITECTURE 已同步
+- [ ] SECURITY 已同步
+- [ ] AGENTS.md 已同步
+- [ ] 无需同步文档

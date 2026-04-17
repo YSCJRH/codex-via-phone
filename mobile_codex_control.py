@@ -22,8 +22,10 @@ from typing import Any, Callable
 
 try:
     import tkinter as tk
+    from tkinter import messagebox
 except ImportError:  # pragma: no cover
     tk = None
+    messagebox = None
     
 
 APP_TITLE = "移动 Codex 控制台"
@@ -65,6 +67,7 @@ SYNC_EVENTS_PATH = DIAGNOSTICS_DIR / "sync-events.json"
 SYNC_SNAPSHOTS_PATH = DIAGNOSTICS_DIR / "sync-snapshots.json"
 AUTO_START_CONFIG_PATH = WORKSPACE / ".runtime" / "auto-start.json"
 AUTO_START_STATE_PATH = WORKSPACE / ".runtime" / "auto-start-state.json"
+MODE_CONFIG_PATH = WORKSPACE / ".runtime" / "mode-config.json"
 MOBILE_USER_AGENT = re.compile(r"android|iphone|ipad|mobile|ios|harmony", re.IGNORECASE)
 MOBILE_OS = {"android", "ios"}
 NGINX_MONTHS = {
@@ -83,6 +86,46 @@ NGINX_MONTHS = {
 }
 
 
+def normalize_mode_name(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"", "localhost", "local-only"}:
+        return "localhost"
+    if normalized in {"tailnet-private", "tailnet-only"}:
+        return "tailnet-private"
+    if normalized == "public-funnel":
+        return "public-funnel"
+    if normalized in {"tailscale-direct", "tailnet-ip", "direct", "legacy-direct"}:
+        return "legacy-direct"
+    return normalized or "localhost"
+
+
+def load_mode_config() -> dict[str, Any]:
+    defaults = {
+        "requestedMode": "localhost",
+        "effectiveMode": "localhost",
+        "persistentRemotePublish": False,
+        "confirmedAt": None,
+        "confirmedByInstallerVersion": None,
+        "legacyStateDetected": False,
+    }
+    if not MODE_CONFIG_PATH.exists():
+        return defaults
+
+    try:
+        data = json.loads(MODE_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return defaults
+
+    return {
+        "requestedMode": normalize_mode_name(data.get("requestedMode")),
+        "effectiveMode": normalize_mode_name(data.get("effectiveMode")),
+        "persistentRemotePublish": bool(data.get("persistentRemotePublish", False)),
+        "confirmedAt": data.get("confirmedAt"),
+        "confirmedByInstallerVersion": data.get("confirmedByInstallerVersion"),
+        "legacyStateDetected": bool(data.get("legacyStateDetected", False)),
+    }
+
+
 def load_app_binding() -> dict[str, Any]:
     if not APP_BINDING_PATH.exists():
         return {"host": "127.0.0.1", "port": APP_PORT, "mode": "localhost"}
@@ -94,21 +137,26 @@ def load_app_binding() -> dict[str, Any]:
 
     host = str(data.get("host") or "127.0.0.1")
     port = int(data.get("port") or APP_PORT)
-    mode = str(data.get("mode") or "localhost")
+    mode = normalize_mode_name(data.get("mode") or "localhost")
+    mode_visibility = normalize_mode_name(data.get("remoteVisibility") or data.get("mode"))
     return {
         "host": host,
         "port": port,
         "mode": mode,
         "url": data.get("url"),
+        "preferred_url": data.get("preferredUrl"),
+        "direct_url": data.get("directUrl"),
+        "serve_url": data.get("serveUrl"),
         "funnel_url": data.get("funnelUrl"),
-        "remote_visibility": data.get("remoteVisibility"),
+        "remote_visibility": mode_visibility,
         "requires_tailscale_client": data.get("requiresTailscaleClient"),
     }
 
 
+MODE_CONFIG = load_mode_config()
 APP_BINDING = load_app_binding()
 APP_PUBLIC_HOST = str(APP_BINDING.get("host") or "127.0.0.1")
-APP_BIND_MODE = str(APP_BINDING.get("mode") or "localhost")
+APP_BIND_MODE = normalize_mode_name(APP_BINDING.get("mode") or MODE_CONFIG.get("effectiveMode"))
 APP_PORT = int(APP_BINDING.get("port") or APP_PORT)
 LOCAL_PANEL_URL = f"http://127.0.0.1:{APP_PORT}"
 APP_PUBLIC_URL = str(APP_BINDING.get("url") or f"http://{APP_PUBLIC_HOST}:{APP_PORT}")
@@ -283,6 +331,46 @@ def format_age_text(value: str | None) -> str:
     return f"{int(delta)} 分钟前"
 
 
+def redacted_label(prefix: str, index: int) -> str:
+    return f"{prefix}-{index}"
+
+
+def redact_ip(value: str | None, index: int | None = None) -> str:
+    if not value:
+        return "redacted-ip"
+    return redacted_label("ip", index or 1)
+
+
+def redact_host(value: str | None, index: int | None = None) -> str:
+    if not value:
+        return "redacted-host"
+    return redacted_label("host", index or 1)
+
+
+def redact_device_id(value: str | None, index: int | None = None) -> str:
+    if not value:
+        return "redacted-device"
+    return redacted_label("device", index or 1)
+
+
+def redact_username(value: str | None, index: int | None = None) -> str:
+    if not value:
+        return "redacted-user"
+    return redacted_label("user", index or 1)
+
+
+def redact_user_agent(value: str | None) -> str:
+    if not value:
+        return "redacted-user-agent"
+    return "redacted-user-agent"
+
+
+def redact_path(value: str | None, index: int | None = None) -> str:
+    if not value:
+        return "redacted-path"
+    return redacted_label("path", index or 1)
+
+
 def load_desktop_approval_bridge_status() -> dict[str, Any]:
     status = {
         "active": False,
@@ -379,19 +467,23 @@ def wait_for(predicate: Callable[[], bool], timeout: float, interval: float = 1.
     return predicate()
 
 
-def powershell_file(script_name: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+def powershell_file(
+    script_name: str,
+    timeout: int = 60,
+    arguments: list[str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     script_path = SCRIPTS_DIR / script_name
-    return run_command(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(script_path),
-        ],
-        timeout=timeout,
-    )
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script_path),
+    ]
+    if arguments:
+        command.extend(arguments)
+    return run_command(command, timeout=timeout)
 
 
 def run_powershell_json(command: str, timeout: int = 12) -> Any | None:
@@ -577,7 +669,7 @@ def parse_https_publication_status(status_text: str | None) -> dict[str, Any]:
     if not status_text:
         return {
             "url": None,
-            "visibility": "unknown",
+            "visibility": "localhost",
             "requires_tailscale_client": None,
         }
 
@@ -594,13 +686,13 @@ def parse_https_publication_status(status_text: str | None) -> dict[str, Any]:
         tailnet_only = "tailnet only" in label
         return {
             "url": match.group(1).rstrip("/"),
-            "visibility": "tailnet-only" if tailnet_only else "public-funnel",
+            "visibility": "tailnet-private" if tailnet_only else "public-funnel",
             "requires_tailscale_client": tailnet_only,
         }
 
     return {
         "url": None,
-        "visibility": "unknown",
+        "visibility": "localhost",
         "requires_tailscale_client": None,
     }
 
@@ -651,11 +743,13 @@ def summarize_remote_urls(remote: dict[str, Any]) -> str:
         parts.append(f"Fallback: {fallback}")
     visibility = str(remote.get("visibility") or "").strip().lower()
     if visibility == "public-funnel":
-        parts.append("Visibility: Public internet via Tailscale Funnel")
-    elif visibility == "tailnet-only":
-        parts.append("Visibility: Tailnet only, phone must stay connected to Tailscale")
-    elif visibility == "tailnet-ip":
-        parts.append("Visibility: Tailnet IP only")
+        parts.append("Mode: PUBLIC INTERNET ENTRYPOINT via Tailscale Funnel")
+    elif visibility == "tailnet-private":
+        parts.append("Mode: tailnet-private via Tailscale Serve HTTPS")
+    elif visibility == "legacy-direct":
+        parts.append("Mode: legacy-direct (deprecated)")
+    else:
+        parts.append("Mode: localhost")
     return " | ".join(parts)
 
 
@@ -745,39 +839,54 @@ def build_remote_status_v2(tailscale_status: dict[str, Any], serve_status: dict[
 """
 
 
-def build_remote_block_v2(remote: dict[str, Any], app_ok: bool, target_ok: bool) -> tuple[StatusBlock, dict[str, Any]]:
+def build_remote_block_v2(
+    remote: dict[str, Any],
+    current_mode: str,
+    app_ok: bool,
+    target_ok: bool,
+) -> tuple[StatusBlock, dict[str, Any]]:
+    visibility = normalize_mode_name(remote.get("visibility") or current_mode)
     if not remote["published"]:
-        block = StatusBlock("Remote Publish", False, "Disabled", "Tailscale remote publish is not enabled.", "error")
-        return block, {"value": "Disabled", "detail": block.detail, "level": "error"}
+        if visibility == "localhost":
+            block = StatusBlock("Mode", True, "localhost", "Default localhost-only mode is active.", "success")
+            return block, {"value": "localhost", "detail": block.detail, "level": "success"}
+
+        block = StatusBlock("Mode", False, visibility, "No published entrypoint is active for the selected mode.", "warning")
+        return block, {"value": visibility, "detail": block.detail, "level": "warning"}
 
     route_text = summarize_remote_urls(remote)
     if not app_ok or not target_ok:
         detail = f"{route_text} | Published, but the local target is not healthy." if route_text else "Published, but the local target is not healthy."
-        block = StatusBlock("Remote Publish", False, "Published, target down", detail, "warning")
-        return block, {"value": "Published", "detail": detail, "level": "warning"}
+        block = StatusBlock("Mode", False, visibility, detail, "warning")
+        return block, {"value": visibility, "detail": detail, "level": "warning"}
 
-    if not is_public_remote_publish(remote):
-        tailnet_detail = "Public internet access is not enabled yet; the phone must stay connected to Tailscale."
+    if visibility == "legacy-direct":
+        detail = f"{route_text} | Legacy direct binding is deprecated and outside the default boundary."
+        block = StatusBlock("Mode", True, "legacy-direct", detail, "warning")
+        return block, {"value": "legacy-direct", "detail": detail, "level": "warning"}
+
+    if visibility == "tailnet-private":
+        tailnet_detail = "tailnet-private is active. The phone must stay on the same tailnet, and Funnel must remain disabled."
         if remote["health_ok"]:
             detail = f"{route_text} | {tailnet_detail}" if route_text else tailnet_detail
-            block = StatusBlock("Remote Publish", True, "Tailnet only", detail, "warning")
-            return block, {"value": "Tailnet only", "detail": detail, "level": "warning"}
+            block = StatusBlock("Mode", True, "tailnet-private", detail, "success")
+            return block, {"value": "tailnet-private", "detail": detail, "level": "success"}
 
         health_summary = normalize_remote_health_detail(remote["health_detail"])
         detail_parts = [part for part in (route_text, tailnet_detail, health_summary) if part]
         detail = " | ".join(detail_parts)
-        block = StatusBlock("Remote Publish", True, "Tailnet only, verify on phone", detail, "warning")
-        return block, {"value": "Tailnet only", "detail": detail, "level": "warning"}
+        block = StatusBlock("Mode", True, "tailnet-private", detail, "warning")
+        return block, {"value": "tailnet-private", "detail": detail, "level": "warning"}
 
     if remote["health_ok"]:
-        detail = f"{route_text} | Self-check passed." if route_text else remote["detail"]
-        block = StatusBlock("Remote Publish", True, "Reachable", detail, "success")
-        return block, {"value": "Reachable", "detail": detail, "level": "success"}
+        detail = f"{route_text} | PUBLIC INTERNET ENTRYPOINT active." if route_text else "PUBLIC INTERNET ENTRYPOINT active."
+        block = StatusBlock("Mode", True, "public-funnel", detail, "warning")
+        return block, {"value": "public-funnel", "detail": detail, "level": "warning"}
 
     health_summary = normalize_remote_health_detail(remote["health_detail"])
     detail = f"{route_text} | {health_summary}" if route_text else health_summary
-    block = StatusBlock("Remote Publish", True, "Published, verify on phone", detail, "warning")
-    return block, {"value": "Published", "detail": detail, "level": "warning"}
+    block = StatusBlock("Mode", True, "public-funnel", detail, "warning")
+    return block, {"value": "public-funnel", "detail": detail, "level": "warning"}
 
 
 def build_remote_status_v2(tailscale_status: dict[str, Any], serve_status: dict[str, Any]) -> dict[str, Any]:
@@ -1083,9 +1192,9 @@ def auto_start_defaults() -> dict[str, Any]:
         "enabled": True,
         "startupDelaySeconds": 45,
         "watchdogIntervalMinutes": 5,
-        "ensureRemotePublish": True,
+        "ensureRemotePublish": False,
         "restartCooldownSeconds": 120,
-        "preserveKnownPublicBinding": True,
+        "preserveKnownPublicBinding": False,
     }
 
 
@@ -1330,24 +1439,115 @@ def resolve_device_request(request_token: str, approved: bool) -> bool:
         return False
 
 
-def collect_status() -> dict[str, Any]:
+def prepare_mobile_peers(
+    peers: list[dict[str, Any]],
+    *,
+    show_sensitive: bool,
+) -> list[dict[str, Any]]:
+    prepared: list[dict[str, Any]] = []
+    for index, peer in enumerate(peers, start=1):
+        item = dict(peer)
+        if not show_sensitive:
+            item["display_name"] = redact_host(item.get("display_name"), index)
+            item["tail_ip"] = redact_ip(item.get("tail_ip"), index)
+        prepared.append(item)
+    return prepared
+
+
+def prepare_approved_devices(
+    devices: list[dict[str, Any]],
+    *,
+    show_sensitive: bool,
+) -> list[dict[str, Any]]:
+    prepared: list[dict[str, Any]] = []
+    for index, item in enumerate(devices, start=1):
+        device = dict(item)
+        if not show_sensitive:
+            device["username"] = redact_username(device.get("username"), index)
+            device["device_id"] = redact_device_id(device.get("device_id"), index)
+            device["display_name"] = redact_device_id(device.get("display_name"), index)
+            device["last_ip"] = redact_ip(device.get("last_ip"), index)
+        prepared.append(device)
+    return prepared
+
+
+def prepare_pending_device_approvals(
+    approvals: list[dict[str, Any]],
+    *,
+    show_sensitive: bool,
+    include_internal: bool,
+) -> list[dict[str, Any]]:
+    prepared: list[dict[str, Any]] = []
+    for index, item in enumerate(approvals, start=1):
+        approval = dict(item)
+        if not include_internal:
+            approval.pop("request_token", None)
+        if not show_sensitive:
+            approval["username"] = redact_username(approval.get("username"), index)
+            approval["device_id"] = redact_device_id(approval.get("device_id"), index)
+            approval["display_name"] = redact_device_id(approval.get("display_name"), index)
+            approval["requested_ip"] = redact_ip(approval.get("requested_ip"), index)
+            approval["requested_user_agent"] = redact_user_agent(approval.get("requested_user_agent"))
+        prepared.append(approval)
+    return prepared
+
+
+def prepare_recent_mobile_requests(
+    requests: list[dict[str, Any]],
+    *,
+    show_sensitive: bool,
+) -> list[dict[str, Any]]:
+    prepared: list[dict[str, Any]] = []
+    for index, item in enumerate(requests, start=1):
+        request = dict(item)
+        if not show_sensitive:
+            request["ip"] = redact_ip(request.get("ip"), index)
+            request["user_agent"] = redact_user_agent(request.get("user_agent"))
+        prepared.append(request)
+    return prepared
+
+
+def prepare_diagnostics(
+    diagnostics: list[str],
+    *,
+    show_sensitive: bool,
+) -> list[str]:
+    if show_sensitive:
+        return diagnostics
+
+    prepared: list[str] = []
+    for index, line in enumerate(diagnostics, start=1):
+        text = str(line)
+        text = re.sub(r"[A-Za-z]:\\Users\\[^\\\s]+(?:\\[^\\\s]+)*", redact_path(text, index), text)
+        text = re.sub(r"(?:\d{1,3}\.){3}\d{1,3}", redact_ip(text, index), text)
+        prepared.append(text)
+    return prepared
+
+
+def collect_status(*, show_sensitive: bool = False, include_internal: bool = False) -> dict[str, Any]:
+    mode_config = load_mode_config()
+    app_binding = load_app_binding()
+    app_bind_mode = normalize_mode_name(app_binding.get("mode") or mode_config.get("effectiveMode"))
+    app_public_host = str(app_binding.get("host") or "127.0.0.1")
+    app_public_url = str(app_binding.get("url") or f"http://{app_public_host}:{APP_PORT}")
+
     listener_map = get_listener_map()
     app_listener = listener_map.get(APP_PORT)
     proxy_listener = listener_map.get(PROXY_PORT)
-    proxy_required = APP_BIND_MODE != "tailscale-direct"
+    proxy_required = app_bind_mode != "legacy-direct"
 
     app_ok, app_health_detail = http_health(APP_HEALTH_URL)
     proxy_ok, proxy_health_detail = http_health(PROXY_HEALTH_URL)
     app_detail = describe_service(app_ok, app_health_detail, app_listener)
     proxy_detail = describe_service(proxy_ok, proxy_health_detail, proxy_listener)
     if not proxy_required:
-        proxy_detail = "Direct Tailscale binding is active; nginx is not required."
+        proxy_detail = "Legacy direct binding is active; nginx is bypassed and this mode is deprecated."
     tailscale_status = load_tailscale_status()
     serve_status = load_serve_status()
     remote = build_remote_status_v2(tailscale_status, serve_status)
-    binding_visibility = str(APP_BINDING.get("remote_visibility") or "").strip()
-    binding_url = str(APP_BINDING.get("funnel_url") or APP_BINDING.get("url") or "").strip()
-    binding_requires_tailscale = APP_BINDING.get("requires_tailscale_client")
+    binding_visibility = normalize_mode_name(app_binding.get("remote_visibility") or app_bind_mode)
+    binding_url = str(app_binding.get("funnel_url") or app_binding.get("serve_url") or app_binding.get("url") or "").strip()
+    binding_requires_tailscale = app_binding.get("requires_tailscale_client")
     if binding_visibility and binding_url:
         health_ok, health_detail = http_health(f"{binding_url.rstrip('/')}/health", timeout=2.5)
         remote = {
@@ -1362,17 +1562,17 @@ def collect_status() -> dict[str, Any]:
             "visibility": binding_visibility,
             "requires_tailscale_client": bool(binding_requires_tailscale),
         }
-    if not remote["published"] and APP_BIND_MODE == "tailscale-direct" and not is_loopback_host(APP_PUBLIC_HOST):
+    if not remote["published"] and app_bind_mode == "legacy-direct" and not is_loopback_host(app_public_host):
         remote = {
             "published": True,
-            "url": APP_PUBLIC_URL,
-            "primary_url": APP_PUBLIC_URL,
+            "url": app_public_url,
+            "primary_url": app_public_url,
             "fallback_url": None,
-            "target": APP_PUBLIC_URL,
-            "detail": "Direct Tailscale binding is active.",
+            "target": app_public_url,
+            "detail": "Legacy direct binding is active.",
             "health_ok": app_ok,
             "health_detail": app_health_detail,
-            "visibility": "tailnet-ip",
+            "visibility": "legacy-direct",
             "requires_tailscale_client": True,
         }
     remote_target_port = parse_remote_target_port(remote.get("target"))
@@ -1380,9 +1580,13 @@ def collect_status() -> dict[str, Any]:
         APP_PORT: app_ok,
         PROXY_PORT: proxy_ok,
     }.get(remote_target_port, app_ok and proxy_ok)
-    peers = extract_mobile_peers(tailscale_status)
-    approved_devices = list_approved_devices()
-    pending_approvals = list_pending_device_approvals()
+    peers = prepare_mobile_peers(extract_mobile_peers(tailscale_status), show_sensitive=show_sensitive)
+    approved_devices = prepare_approved_devices(list_approved_devices(), show_sensitive=show_sensitive)
+    pending_approvals = prepare_pending_device_approvals(
+        list_pending_device_approvals(),
+        show_sensitive=show_sensitive,
+        include_internal=include_internal,
+    )
     desktop_bridge = load_desktop_approval_bridge_status()
     runtime_diagnostics = load_runtime_diagnostics()
     auto_start = load_auto_start_metadata()
@@ -1405,8 +1609,8 @@ def collect_status() -> dict[str, Any]:
         if recent_requests
         else "暂无手机访问记录"
     )
-    remote_block, remote_summary = build_remote_block_v2(remote, True, remote_target_ok)
-    remote_available = remote["published"] and remote_target_ok
+    mode_block, mode_summary = build_remote_block_v2(remote, app_bind_mode, True, remote_target_ok)
+    mode_available = remote["published"] and remote_target_ok
 
     tailscale_running = bool(tailscale_status.get("ok") and backend_state == "Running")
     tailscale_headline = "运行中" if tailscale_running else backend_state
@@ -1471,7 +1675,7 @@ def collect_status() -> dict[str, Any]:
             tailscale_detail,
             tailscale_level,
         ),
-        remote_block,
+        mode_block,
         StatusBlock(
             "Desktop approval bridge",
             bool(desktop_bridge["active"]),
@@ -1498,26 +1702,33 @@ def collect_status() -> dict[str, Any]:
     return {
         "checked_at": now_local().strftime("%Y-%m-%d %H:%M:%S"),
         "local_url": LOCAL_PANEL_URL,
-        "remote_url": remote["url"],
+        "mode_url": remote["url"],
         "blocks": [block.to_dict() for block in blocks],
         "mobile_peers": peers,
         "approved_devices": approved_devices,
         "pending_device_approvals": pending_approvals,
-        "recent_mobile_requests": recent_requests,
-        "diagnostics": [f"[本地] 认证数据库：{AUTH_DB_PATH}"] + tail_error_lines(),
+        "recent_mobile_requests": prepare_recent_mobile_requests(recent_requests, show_sensitive=show_sensitive),
+        "diagnostics": prepare_diagnostics(
+            ["[local] auth database available"] + tail_error_lines(),
+            show_sensitive=show_sensitive,
+        ),
         "summary": {
             "app_running": app_ok,
             "nginx_running": proxy_ok,
             "tailscale_running": tailscale_running,
             "tailscale_permission_blind": tailscale_permission_blind,
-            "remote_enabled": remote["published"],
-            "remote_reachable": remote_available,
-            "remote_available": remote_available,
-            "remote_level": remote_summary["level"],
-            "remote_value": remote_summary["value"],
-            "remote_detail": remote_summary["detail"],
-            "remote_visibility": remote.get("visibility"),
-            "remote_requires_tailscale_client": bool(remote.get("requires_tailscale_client")),
+            "mode_requested": normalize_mode_name(mode_config.get("requestedMode") or app_bind_mode),
+            "mode_effective": normalize_mode_name(mode_config.get("effectiveMode") or app_bind_mode),
+            "mode_persistent_remote_publish": bool(mode_config.get("persistentRemotePublish")),
+            "mode_legacy_state_detected": bool(mode_config.get("legacyStateDetected")),
+            "mode_enabled": remote["published"],
+            "mode_reachable": mode_available,
+            "mode_available": mode_available,
+            "mode_level": mode_summary["level"],
+            "mode_value": mode_summary["value"],
+            "mode_detail": mode_summary["detail"],
+            "mode_name": normalize_mode_name(remote.get("visibility") or app_bind_mode),
+            "mode_requires_tailscale_client": bool(remote.get("requires_tailscale_client")),
             "approved_devices": len(approved_devices),
             "pending_approvals": len(pending_approvals),
             "desktop_bridge_active": bool(desktop_bridge["active"]),
@@ -1548,7 +1759,7 @@ def collect_status() -> dict[str, Any]:
                 str(PROXY_PORT): (
                     proxy_listener.summary()
                     if proxy_listener
-                    else "不需要 (tailscale-direct)"
+                    else "not required (legacy-direct)"
                     if not proxy_required
                     else "端口未监听"
                 ),
@@ -1587,12 +1798,12 @@ def stack_is_stopped() -> bool:
 def wait_for_remote_reachable(timeout: float = 8.0) -> bool:
     def _remote_ok() -> bool:
         status = collect_status()
-        return bool(status["summary"]["remote_reachable"])
+        return bool(status["summary"]["mode_reachable"])
 
     return wait_for(_remote_ok, timeout=timeout, interval=1.0)
 
 
-def perform_action(action: str) -> str:
+def perform_action(action: str, *, assume_yes: bool = False) -> str:
     if action == "start":
         result = powershell_file("start-mobile-codex-stack.ps1", timeout=30)
         if result.returncode != 0:
@@ -1619,19 +1830,38 @@ def perform_action(action: str) -> str:
                 raise RuntimeError(f"Stop command finished, but local listeners are still present: {detail}")
         return "Mobile Codex stack stopped."
 
-    if action == "enable_remote":
-        result = powershell_file("enable-mobile-codex-remote.ps1", timeout=30)
+    if action == "enable_tailnet_private":
+        result = powershell_file("enable-mobile-codex-tailnet-private.ps1", timeout=30)
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Failed to enable remote publish.")
-        if not wait_for(remote_publish_is_public, timeout=12, interval=1.0):
-            raise RuntimeError(
-                "Remote publish command completed, but the HTTPS endpoint is still not public. Funnel is still blocked or tailnet-only."
-            )
-        if wait_for_remote_reachable(timeout=8):
-            return "Remote publish is enabled and the public Funnel URL is reachable."
-        return "Remote publish is enabled. If the phone still cannot open it immediately, wait a few seconds for DNS and TLS propagation, then refresh."
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Failed to enable tailnet-private mode.")
+        return "tailnet-private mode is enabled."
 
-    if action == "disable_remote":
+    if action == "disable_tailnet_private":
+        result = powershell_file("disable-mobile-codex-tailnet-private.ps1", timeout=20)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Failed to disable tailnet-private mode.")
+        return "tailnet-private mode has been disabled."
+
+    if action == "publish_public_funnel":
+        result = powershell_file(
+            "publish-mobile-codex-public-funnel.ps1",
+            timeout=30,
+            arguments=["-Yes"] if assume_yes else None,
+        )
+        if result.returncode != 0:
+            if result.returncode == 3 and not assume_yes:
+                raise RuntimeError(
+                    "public-funnel requires explicit confirmation. Confirm it in the desktop tool, or run the script again with -Yes."
+                )
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Failed to publish public-funnel mode.")
+        if wait_for_remote_reachable(timeout=8):
+            return "public-funnel is enabled and the public entrypoint is reachable."
+        return "public-funnel is enabled. If the phone still cannot open it immediately, wait a few seconds for DNS and TLS propagation, then refresh."
+
+    if action == "unpublish_public_funnel":
+        result = powershell_file("unpublish-mobile-codex-public-funnel.ps1", timeout=20)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Failed to disable public-funnel mode.")
         funnel_result = run_command([str(TAILSCALE), "funnel", "reset"], timeout=10)
         serve_result = run_command([str(TAILSCALE), "serve", "reset"], timeout=10)
         if not wait_for(lambda: not remote_publish_is_enabled(), timeout=8, interval=0.8):
@@ -1643,8 +1873,8 @@ def perform_action(action: str) -> str:
                 )
                 if text
             )
-            raise RuntimeError(detail or "Remote publish reset commands ran, but the published endpoints still exist.")
-        return "Remote publish has been disabled."
+            raise RuntimeError(detail or "public-funnel reset commands ran, but the published endpoints still exist.")
+        return "public-funnel has been disabled."
 
     if action == "enable_desktop_approvals":
         result = powershell_file("enable-remote-desktop-approvals.ps1", timeout=20)
@@ -1680,7 +1910,9 @@ class ControlApp:
         self.status_text = tk.StringVar(value="就绪")
         self.last_refresh_text = tk.StringVar(value="尚未刷新")
         self.local_url_text = tk.StringVar(value=f"本地面板：{LOCAL_PANEL_URL}")
-        self.remote_url_text = tk.StringVar(value="远程地址：未开启")
+        self.remote_url_text = tk.StringVar(value="模式入口：localhost")
+        self.show_sensitive = tk.BooleanVar(value=False)
+        self.sensitive_warning_text = tk.StringVar(value="")
         self.block_labels: list[dict[str, tk.Label]] = []
         self.metric_widgets: dict[str, dict[str, Any]] = {}
         self.pending_approval_items: list[dict[str, Any]] = []
@@ -1735,7 +1967,7 @@ class ControlApp:
             [
                 ("services", "本机服务", "健康服务数量"),
                 ("autostart", "自动启动", "登录后自动启动与低频保活"),
-                ("remote", "远程发布", "Tailscale 私有地址"),
+                ("mode", "访问模式", "localhost / tailnet-private / public-funnel"),
                 ("mobile", "手机在线", "手机设备在线情况"),
                 ("whitelist", "设备白名单", "已批准设备数量"),
                 ("approvals", "待审批", "首次登录待电脑授权"),
@@ -1773,8 +2005,10 @@ class ControlApp:
             ("刷新状态", "#1f6feb", lambda: self.run_background("正在刷新状态...", self._refresh_action)),
             ("启动服务", "#0f9d58", lambda: self.run_background("正在启动整套服务...", lambda: self._action_and_refresh("start"))),
             ("停止服务", "#d93025", lambda: self.run_background("正在停止整套服务...", lambda: self._action_and_refresh("stop"))),
-            ("开启远程发布", "#0b7285", lambda: self.run_background("正在开启远程发布...", lambda: self._action_and_refresh("enable_remote"))),
-            ("关闭远程发布", "#b26a00", lambda: self.run_background("正在关闭远程发布...", lambda: self._action_and_refresh("disable_remote"))),
+            ("启用 tailnet-private", "#0b7285", self._confirm_tailnet_private_enable),
+            ("关闭 tailnet-private", "#4c6f7a", lambda: self.run_background("正在关闭 tailnet-private...", lambda: self._action_and_refresh("disable_tailnet_private"))),
+            ("发布 public-funnel", "#c2410c", self._confirm_public_funnel_publish),
+            ("关闭 public-funnel", "#9a3412", lambda: self.run_background("正在关闭 public-funnel...", lambda: self._action_and_refresh("unpublish_public_funnel"))),
             ("Enable remote approvals (60m)", "#2b8a3e", lambda: self.run_background("Enabling remote desktop approvals...", lambda: self._action_and_refresh("enable_desktop_approvals"))),
             ("Disable remote approvals", "#8d6e63", lambda: self.run_background("Disabling remote desktop approvals...", lambda: self._action_and_refresh("disable_desktop_approvals"))),
             ("打开本地面板", "#5f3dc4", lambda: self.run_background("正在打开本地面板...", lambda: perform_action("open_local"))),
@@ -1811,6 +2045,26 @@ class ControlApp:
             bg="#eef3f8",
             fg="#4f6072",
         ).pack(side="right")
+
+        warning_row = tk.Frame(container, bg="#eef3f8")
+        warning_row.pack(fill="x", pady=(0, 12))
+        tk.Checkbutton(
+            warning_row,
+            text="显示敏感信息（危险）",
+            variable=self.show_sensitive,
+            bg="#eef3f8",
+            fg="#8a1c1c",
+            activebackground="#eef3f8",
+            activeforeground="#8a1c1c",
+            command=lambda: self.run_background("正在刷新状态...", self._refresh_action, skip_if_busy=True, show_pending=False),
+        ).pack(side="left")
+        tk.Label(
+            warning_row,
+            textvariable=self.sensitive_warning_text,
+            font=("Microsoft YaHei UI", 9, "bold"),
+            bg="#eef3f8",
+            fg="#b42318",
+        ).pack(side="left", padx=(12, 0))
 
         grid = tk.Frame(container, bg="#eef3f8")
         grid.pack(fill="x", pady=(0, 12))
@@ -2053,7 +2307,7 @@ class ControlApp:
             if not resolve_device_request(token, approved):
                 raise RuntimeError("审批未生效，请刷新后重试。")
 
-            status = collect_status()
+            status = collect_status(show_sensitive=bool(self.show_sensitive.get()), include_internal=True)
             self.root.after(0, lambda: self.apply_status(status))
             device_name = current.get("display_name") or current.get("device_id") or "该设备"
             return f"已{action_text}设备：{device_name}"
@@ -2069,15 +2323,58 @@ class ControlApp:
         return "#fff2f0", "#d93025", "#d93025"
 
     def _refresh_action(self) -> str:
-        status = collect_status()
+        status = collect_status(show_sensitive=bool(self.show_sensitive.get()), include_internal=True)
         self.root.after(0, lambda: self.apply_status(status))
         return "状态已刷新"
 
-    def _action_and_refresh(self, action: str) -> str:
-        message = perform_action(action)
-        status = collect_status()
+    def _action_and_refresh(self, action: str, *, assume_yes: bool = False) -> str:
+        message = perform_action(action, assume_yes=assume_yes)
+        status = collect_status(show_sensitive=bool(self.show_sensitive.get()), include_internal=True)
         self.root.after(0, lambda: self.apply_status(status))
         return message
+
+    def _confirm_tailnet_private_enable(self) -> None:
+        if not messagebox:
+            self.run_background(
+                "正在启用 tailnet-private...",
+                lambda: self._action_and_refresh("enable_tailnet_private"),
+            )
+            return
+
+        confirmed = messagebox.askyesno(
+            "Enable tailnet-private",
+            "tailnet-private 会通过 Tailscale Serve HTTPS 暴露一个仅 tailnet 可访问的入口。\n\n"
+            "应用本身仍保持 localhost-only，Funnel 不会启用。\n\n"
+            "是否继续？",
+            icon="warning",
+        )
+        if confirmed:
+            self.run_background(
+                "正在启用 tailnet-private...",
+                lambda: self._action_and_refresh("enable_tailnet_private"),
+            )
+
+    def _confirm_public_funnel_publish(self) -> None:
+        if not messagebox:
+            self.run_background(
+                "正在发布 public-funnel...",
+                lambda: self._action_and_refresh("publish_public_funnel", assume_yes=True),
+            )
+            return
+
+        confirmed = messagebox.askyesno(
+            "Publish public-funnel",
+            "DANGER: public-funnel 会创建公网入口。\n\n"
+            "请求将通过 Tailscale Funnel HTTPS -> 本机 nginx -> localhost app。\n"
+            "这不应该作为默认模式，也不会自动持久化。\n\n"
+            "只有在你明确需要公网访问时才继续。是否确认发布？",
+            icon="warning",
+        )
+        if confirmed:
+            self.run_background(
+                "正在发布 public-funnel...",
+                lambda: self._action_and_refresh("publish_public_funnel", assume_yes=True),
+            )
 
     def run_background(
         self,
@@ -2117,7 +2414,8 @@ class ControlApp:
         summary = status["summary"]
         self.last_refresh_text.set(f"最近刷新：{status['checked_at']}")
         self.local_url_text.set(f"本地面板：{status['local_url']}")
-        self.remote_url_text.set(f"远程地址：{status['remote_url'] or '未开启'}")
+        self.remote_url_text.set(f"模式入口：{status['mode_url'] or 'localhost'}")
+        self.sensitive_warning_text.set("敏感信息显示已开启，请勿截图或导出。" if self.show_sensitive.get() else "")
 
         metric_values = {
             "services": (
@@ -2130,10 +2428,10 @@ class ControlApp:
                 summary["autostart_detail"],
                 summary["autostart_level"],
             ),
-            "remote": (
-                summary["remote_value"],
-                summary["remote_detail"],
-                summary["remote_level"],
+            "mode": (
+                summary["mode_value"],
+                summary["mode_detail"],
+                summary["mode_level"],
             ),
             "mobile": (
                 f"{summary['mobile_online']}/{summary['mobile_total']}",
@@ -2221,20 +2519,31 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="输出当前状态 JSON 后退出")
     parser.add_argument(
         "--action",
-        choices=["start", "stop", "enable_remote", "disable_remote", "enable_desktop_approvals", "disable_desktop_approvals", "open_local"],
+        choices=[
+            "start",
+            "stop",
+            "enable_tailnet_private",
+            "disable_tailnet_private",
+            "publish_public_funnel",
+            "unpublish_public_funnel",
+            "enable_desktop_approvals",
+            "disable_desktop_approvals",
+            "open_local",
+        ],
         help="执行一次控制操作后退出",
     )
+    parser.add_argument("--show-sensitive", action="store_true", help="在 JSON 输出中显示敏感字段，并附带危险提示。")
     args = parser.parse_args()
 
     if args.action:
         message = perform_action(args.action)
         print(message)
         if args.json:
-            print(json.dumps(collect_status(), ensure_ascii=False, indent=2))
+            print(json.dumps(collect_status(show_sensitive=args.show_sensitive, include_internal=args.show_sensitive), ensure_ascii=False, indent=2))
         return 0
 
     if args.json:
-        print(json.dumps(collect_status(), ensure_ascii=False, indent=2))
+        print(json.dumps(collect_status(show_sensitive=args.show_sensitive, include_internal=args.show_sensitive), ensure_ascii=False, indent=2))
         return 0
 
     if tk is None:

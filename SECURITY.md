@@ -2,54 +2,55 @@
 
 [中文](SECURITY.zh-CN.md) | [English](SECURITY.md)
 
-## Who this is for
+## Default Security Boundary
 
-This file is mainly for:
+The default boundary for this repository is:
 
-- people who deploy this for their own long-term use
-- people who plan to publish a fork safely
+- single-user
+- self-hosted
+- localhost-first
+- nginx in front of the app
+- desktop approval for every first-time device
+- hardened mode left enabled by default
 
-## Safe default model
+If you change that into public exposure, multi-user sharing, or approval-free login, you are outside the default security boundary.
 
-The supported default model is:
+## Supported Access Modes
 
-- keep the app bound to `127.0.0.1`
-- put a reverse proxy in front of the app
-- prefer a private-network entrypoint
-- require desktop approval for every first-time device
-- keep hardened mode enabled unless you re-audit the trust boundary
+- `localhost`
+  Default mode. The app stays bound to `127.0.0.1`.
+- `tailnet-private`
+  Allowed remote mode. Tailscale Serve publishes a tailnet-only HTTPS route to local nginx. It must not call Funnel.
+- `public-funnel`
+  Dangerous mode. Tailscale Funnel publishes a public internet HTTPS route to local nginx. It must be enabled explicitly and must never be the default.
 
-This repository is designed for a single-user self-hosted workflow. If you turn it into public exposure, multi-user sharing, or approval-free login, you are outside the default security boundary.
+Legacy direct bindings are outside the default boundary and are kept only for migration detection.
 
-## Not recommended
+## Prohibited Defaults
 
-The following are intentionally outside the safe default model:
+The following must not become defaults in docs, scripts, or shipped config:
 
-- exposing the Node app directly to the public internet
-- loosening trusted-device approval without a security review
-- publishing runtime data, diagnostics bundles, or approval traces
-- shipping real secrets or private hostnames in docs, scripts, or config files
+- exposing the Node app directly to the internet
+- enabling `public-funnel` without explicit confirmation
+- treating `tailnet-private` as if it were Funnel or a direct tailnet IP bind
+- approval-free login for new devices
+- publishing tokens, secrets, diagnostics evidence, or approval traces by default
 
-## Public-safe documentation rules
+## Public-Safe Output Rules
 
-When publishing this repository or a fork, use placeholders instead of personal values.
+User-facing output, screenshots, support bundles, issue attachments, and example JSON should not include real:
 
-Replace real values such as:
-
-- private HTTPS entrypoints
-- tailnet hostnames
+- request tokens
+- approval traces
+- Windows usernames
+- absolute local paths
+- private hostnames
 - private IPs
-- Windows usernames and local absolute paths
-- device IDs, session IDs, approval tokens, and runtime screenshots
+- device IDs
 
-Prefer placeholders such as:
+Use placeholders instead.
 
-- `https://mobile-codex.example.com`
-- `<PRIVATE_HTTPS_ENTRYPOINT>`
-- `<TAILNET_IP>`
-- `<PATH_TO_MOBILE_CODEX_HELPER>`
-
-## Private-local-only artifacts
+## Private-Local-Only Artifacts
 
 Never commit or publish:
 
@@ -58,24 +59,17 @@ Never commit or publish:
 - certificates, private keys, or local TLS material
 - runtime logs and diagnostics exports
 - session JSONL files and approval evidence
-- maintainer-only release notes or one-off release materials
+- maintainer-only notes or one-off release materials
 - sibling private projects and other parent-workspace assets
-- packaged binaries built from your private environment
+- binaries built from your private environment
 
 See [docs/PRIVATE_LOCAL_ONLY.md](docs/PRIVATE_LOCAL_ONLY.md).
 
-## Release checks
+## Release Checks
 
 Before a public push, review:
 
 - `scripts/check-open-source-tree.ps1`
 - `docs/OPEN_SOURCE_RELEASE_CHECKLIST.md`
 
-If you are a maintainer, run those checks against a sanitized staging copy instead of treating a live private working tree as publish-ready.
-
-If an older private build ever exposed query tokens, auth secrets, or device-bound material, rotate the real secrets before publishing.
-
-## Reporting guidance
-
-- For non-sensitive bugs, open a public GitHub issue.
-- For security-sensitive findings, replace this section with your private reporting contact before publishing the repository broadly.
+Run those checks against a sanitized staging copy instead of treating a live private working tree as publish-ready.

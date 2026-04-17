@@ -2,83 +2,74 @@
 
 [中文](SECURITY.zh-CN.md) | [English](SECURITY.md)
 
-## 这份文件给谁看
+## 默认安全边界
 
-这份文件主要面向两类人：
+这个仓库的默认安全边界是：
 
-- 想长期自用部署的人
-- 想把自己的 fork 安全公开发布的人
+- 单用户
+- 自托管
+- localhost-first
+- 在应用前面放 nginx
+- 每台新设备第一次登录都需要桌面审批
+- 默认保持 hardened mode 开启
 
-## 安全默认模型
+如果你把它改造成公网开放、多用户共享，或者让新设备免审批登录，就已经超出默认安全边界。
 
-本仓库支持的默认模型是：
+## 支持的访问模式
 
-- 应用只监听 `127.0.0.1`
-- 前面加一层反向代理
-- 优先使用私网入口
-- 新设备第一次登录必须经过桌面端批准
-- 除非重新审计信任边界，否则 hardened mode 默认保持开启
+- `localhost`
+  默认模式。应用保持绑定在 `127.0.0.1`。
+- `tailnet-private`
+  允许的远程模式。通过 Tailscale Serve 把仅 tailnet 可访问的 HTTPS 路由转发到本机 nginx，绝不能调用 Funnel。
+- `public-funnel`
+  危险模式。通过 Tailscale Funnel 把公网 HTTPS 路由转发到本机 nginx。这个模式必须显式开启，绝不能当默认值。
 
-本仓库默认面向单用户、自托管场景。  
-如果你把它改造成公网开放、多用户共享或免审批登录，就已经超出默认安全边界了。
+legacy direct 已经不属于默认边界，只保留作迁移检测。
 
-## 不推荐做法
+## 禁止成为默认值的行为
 
-以下做法不属于安全默认模型：
+下面这些行为，不能在文档、脚本或默认配置里变成默认路线：
 
-- 将 Node 应用直接暴露到公网
-- 未经过安全审查就放宽可信设备审批
-- 发布运行时日志、诊断导出或审批痕迹
-- 在文档、脚本或配置中写入真实 secret、真实域名或私人路径
+- 直接把 Node 应用暴露到公网
+- 未经明确确认就启用 `public-funnel`
+- 把 `tailnet-private` 写成 Funnel 或 tailnet IP 直连
+- 让新设备免审批登录
+- 默认公开 token、secret、诊断证据或审批痕迹
 
-## 公开文档的脱敏规则
+## 面向公开输出的脱敏规则
 
-准备公开仓库或公开 fork 时，文档必须使用占位符，而不是私人真实值。
+用户可见输出、截图、支持包、issue 附件和示例 JSON 默认都不应包含真实的：
 
-需要替换的典型内容包括：
-
-- 私有 HTTPS 入口
-- tailnet 域名
+- request token
+- 审批痕迹
+- Windows 用户名
+- 本地绝对路径
+- 私有主机名
 - 私网 IP
-- Windows 用户名和本机绝对路径
-- 设备 ID、会话 ID、审批 token、运行时截图
+- 设备 ID
 
-推荐占位符写法：
-
-- `https://mobile-codex.example.com`
-- `<PRIVATE_HTTPS_ENTRYPOINT>`
-- `<TAILNET_IP>`
-- `<PATH_TO_MOBILE_CODEX_HELPER>`
+请统一改成占位符。
 
 ## 私有本地内容
 
-以下内容绝对不要提交或公开：
+以下内容绝不能提交或公开：
 
 - 认证数据库
 - JWT secret
-- 证书和私钥
-- 运行日志与诊断导出
-- session JSONL 与审批证据
-- 维护者内部发布说明或一次性发布材料
-- 父目录工作区中的 sibling project 与其它私人资产
-- 从私人环境打包出来的二进制
+- 证书、私钥和本地 TLS 物料
+- 运行日志和诊断导出
+- session JSONL 和审批证据
+- 维护者私有说明或一次性发布材料
+- 父目录工作区里的 sibling project 和其他私有资产
+- 在私有环境里打出来的二进制
 
-详见：
+详见 [docs/PRIVATE_LOCAL_ONLY.zh-CN.md](docs/PRIVATE_LOCAL_ONLY.zh-CN.md)。
 
-- [docs/PRIVATE_LOCAL_ONLY.zh-CN.md](docs/PRIVATE_LOCAL_ONLY.zh-CN.md)
+## 发布前检查
 
-## 发版前检查
-
-公开推送前请至少检查：
+公开推送前，至少要检查：
 
 - `scripts/check-open-source-tree.ps1`
 - `docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md`
 
-如果你是维护者，请在一份脱敏后的 staging 发布副本里运行这些检查，而不是把当前私有工作树直接当作可发布快照。
-
-如果旧版私有构建曾暴露过 query token、认证 secret 或设备绑定材料，请先在真实环境中完成轮换。
-
-## 漏洞反馈
-
-- 普通问题可以走公开 GitHub issue
-- 安全敏感问题建议在正式公开前先配置一个私密反馈渠道，再替换本文件中的说明
+这些检查应该在脱敏后的 staging 副本里执行，而不是把仍在运行的私有工作树直接当作可发布快照。

@@ -19,9 +19,9 @@ function Get-DefaultAutoStartConfig {
     enabled = $true
     startupDelaySeconds = 45
     watchdogIntervalMinutes = 5
-    ensureRemotePublish = $true
+    ensureRemotePublish = $false
     restartCooldownSeconds = 120
-    preserveKnownPublicBinding = $true
+    preserveKnownPublicBinding = $false
   }
 }
 

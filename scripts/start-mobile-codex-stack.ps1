@@ -1,6 +1,7 @@
 $workspace = Split-Path -Parent $PSScriptRoot
 $powershellExe = Join-Path $PSHOME 'powershell.exe'
 $cmdExe = Join-Path $env:SystemRoot 'System32\cmd.exe'
+. (Join-Path $PSScriptRoot 'lib\mobile-codex-common.ps1')
 
 function Wait-HealthyEndpoint {
   param(
@@ -65,12 +66,7 @@ function Resolve-AppBindHost {
     return $env:MOBILE_CODEX_BIND_HOST
   }
 
-  $mode = if ($env:MOBILE_CODEX_BIND_MODE) { $env:MOBILE_CODEX_BIND_MODE } else { 'tailscale-direct' }
-  if ($mode -eq 'localhost') {
-    return '127.0.0.1'
-  }
-
-  return '0.0.0.0'
+  return '127.0.0.1'
 }
 
 function Resolve-AppPublicHost {
@@ -125,7 +121,7 @@ function Resolve-TailscaleHttpsPublication {
       $tailnetOnly = $label.Contains('tailnet only')
       return [pscustomobject]@{
         url = $match.Groups[1].Value.TrimEnd('/')
-        visibility = if ($tailnetOnly) { 'tailnet-only' } else { 'public-funnel' }
+        mode = if ($tailnetOnly) { 'tailnet-private' } else { 'public-funnel' }
         requiresTailscaleClient = $tailnetOnly
       }
     }
@@ -162,8 +158,8 @@ function Get-PreservedHttpsPublication {
     return $null
   }
 
-  $existingVisibility = [string]$Binding.remoteVisibility
-  if ($existingVisibility -notin @('public-funnel', 'tailnet-only')) {
+  $existingVisibility = ConvertTo-MobileCodexModeName ([string]$Binding.remoteVisibility)
+  if ($existingVisibility -notin @('public-funnel', 'tailnet-private')) {
     return $null
   }
 
@@ -179,11 +175,11 @@ function Get-PreservedHttpsPublication {
 
   return [pscustomobject]@{
     url = $existingUrl.TrimEnd('/')
-    visibility = $existingVisibility
+    mode = $existingVisibility
     requiresTailscaleClient = if ($null -ne $Binding.requiresTailscaleClient) {
       [bool]$Binding.requiresTailscaleClient
     } else {
-      $existingVisibility -eq 'tailnet-only'
+      $existingVisibility -eq 'tailnet-private'
     }
   }
 }
@@ -253,6 +249,7 @@ $stdoutLog = Join-Path $logDir 'mobile-codex-app.stdout.log'
 $stderrLog = Join-Path $logDir 'mobile-codex-app.stderr.log'
 $bindingFile = Join-Path $runtimeDir 'app-binding.json'
 $existingBinding = Load-AppBinding -Path $bindingFile
+$modeConfig = Get-MobileCodexModeConfig
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
@@ -264,33 +261,37 @@ try {
   & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $stopScript | Out-Null
 
   $bindHost = Resolve-AppBindHost
-  $publicHost = Resolve-AppPublicHost -BindHost $bindHost
-  if (($publicHost -eq '127.0.0.1' -or -not $publicHost) -and $existingBinding -and $existingBinding.host) {
-    $existingHost = [string]$existingBinding.host
-    if ($existingHost -and $existingHost -notin @('127.0.0.1', '0.0.0.0')) {
-      $publicHost = $existingHost
-    }
-  }
-  $bindMode = if ($bindHost -eq '127.0.0.1') { 'localhost' } else { 'tailscale-direct' }
-  $appHealthUrl = if ($bindMode -eq 'localhost') { 'http://127.0.0.1:3001/health' } else { 'http://127.0.0.1:3001/health' }
-  $directUrl = "http://${publicHost}:3001"
+  $bindMode = if (Test-MobileCodexLoopbackHost -Host $bindHost) { [string]$modeConfig.effectiveMode } else { 'legacy-direct' }
+  $publicHost = if ($bindMode -eq 'legacy-direct') { Resolve-AppPublicHost -BindHost $bindHost } else { '127.0.0.1' }
+  $appHealthUrl = 'http://127.0.0.1:3001/health'
+  $directUrl = 'http://127.0.0.1:3001'
   $httpsPublication = Resolve-TailscaleHttpsPublication
   if (-not $httpsPublication) {
     $httpsPublication = Get-PreservedHttpsPublication -Binding $existingBinding
   }
-  $serveUrl = if ($httpsPublication) { $httpsPublication.url } else { $null }
-  $recommendedUrl = if ($serveUrl) { $serveUrl } else { $directUrl }
+  $publishedMode = if ($httpsPublication) { [string]$httpsPublication.mode } else { $bindMode }
+  $serveUrl = if ($httpsPublication -and $httpsPublication.mode -eq 'tailnet-private') { $httpsPublication.url } else { $null }
+  $funnelUrl = if ($httpsPublication -and $httpsPublication.mode -eq 'public-funnel') { $httpsPublication.url } else { $null }
+  $preferredUrl = if ($publishedMode -eq 'public-funnel' -and $funnelUrl) {
+    $funnelUrl
+  } elseif ($publishedMode -eq 'tailnet-private' -and $serveUrl) {
+    $serveUrl
+  } elseif ($bindMode -eq 'legacy-direct') {
+    "http://${publicHost}:3001"
+  } else {
+    $directUrl
+  }
   $bindingInfo = @{
-    host = $publicHost
+    host = if ($bindMode -eq 'legacy-direct') { $publicHost } else { '127.0.0.1' }
     port = 3001
     mode = $bindMode
-    url = $recommendedUrl
-    preferredUrl = $recommendedUrl
+    url = $preferredUrl
+    preferredUrl = $preferredUrl
     directUrl = $directUrl
     serveUrl = $serveUrl
-    funnelUrl = if ($httpsPublication -and $httpsPublication.visibility -eq 'public-funnel') { $httpsPublication.url } else { $null }
-    remoteVisibility = if ($httpsPublication) { $httpsPublication.visibility } elseif ($bindMode -eq 'tailscale-direct') { 'tailnet-ip' } else { 'local-only' }
-    requiresTailscaleClient = if ($httpsPublication) { [bool]$httpsPublication.requiresTailscaleClient } elseif ($bindMode -eq 'tailscale-direct') { $true } else { $false }
+    funnelUrl = $funnelUrl
+    remoteVisibility = $publishedMode
+    requiresTailscaleClient = if ($httpsPublication) { [bool]$httpsPublication.requiresTailscaleClient } elseif ($bindMode -eq 'tailnet-private' -or $bindMode -eq 'legacy-direct') { $true } else { $false }
     updatedAt = (Get-Date).ToString('o')
   } | ConvertTo-Json -Depth 3
   Set-Content -Path $bindingFile -Value $bindingInfo -Encoding UTF8
@@ -321,15 +322,15 @@ try {
 
   Wait-HealthyEndpoint -Uri $appHealthUrl -Name 'mobileCodex app'
 
-  if ($bindMode -eq 'localhost') {
+  if ($bindMode -ne 'legacy-direct') {
     try {
       & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $nginxScript | Out-Null
       Wait-HealthyEndpoint -Uri 'http://127.0.0.1:8080/health' -Name 'mobileCodex nginx proxy' -TimeoutSeconds 10
     } catch {
-      Write-Warning "nginx proxy did not start cleanly. Remote Tailscale access now targets 127.0.0.1:3001 directly, so the app stack will continue without nginx."
+      throw "nginx proxy did not start cleanly. localhost, tailnet-private, and public-funnel modes require nginx on 127.0.0.1:8080."
     }
   } else {
-    Write-Warning "Direct Tailscale binding is active on ${publicHost}:3001. nginx startup is skipped."
+    Write-Warning "Legacy direct binding is active on ${publicHost}:3001. This mode is deprecated and outside the default boundary."
   }
 } catch {
   & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $stopScript | Out-Null

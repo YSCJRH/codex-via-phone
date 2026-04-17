@@ -15,7 +15,7 @@ $statePath = Join-Path $runtimeDir 'auto-start-state.json'
 $bindingPath = Join-Path $runtimeDir 'app-binding.json'
 $lockPath = Join-Path $cacheDir 'ensure-stack.lock'
 $startScript = Join-Path $PSScriptRoot 'start-mobile-codex-stack.ps1'
-$remoteScript = Join-Path $PSScriptRoot 'enable-mobile-codex-remote.ps1'
+$remoteScript = Join-Path $PSScriptRoot 'publish-mobile-codex-public-funnel.ps1'
 $appHealthUrl = 'http://127.0.0.1:3001/health'
 $lockTtlSeconds = 600
 
@@ -24,9 +24,9 @@ function Get-DefaultAutoStartConfig {
     enabled = $true
     startupDelaySeconds = 45
     watchdogIntervalMinutes = 5
-    ensureRemotePublish = $true
+    ensureRemotePublish = $false
     restartCooldownSeconds = 120
-    preserveKnownPublicBinding = $true
+    preserveKnownPublicBinding = $false
   }
 }
 
@@ -203,10 +203,11 @@ function Test-PublicBinding {
 function Invoke-PowerShellScript {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$ScriptPath
+    [string]$ScriptPath,
+    [string[]]$Arguments = @()
   )
 
-  $output = & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath 2>&1 | Out-String
+  $output = & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1 | Out-String
   return @{
     exitCode = $LASTEXITCODE
     output = $output.Trim()
@@ -347,7 +348,7 @@ try {
 
   if ($shouldEnsureRemote) {
     $state.lastAction = if ($state.lastAction -eq 'start-stack') { 'start-stack+ensure-remote' } else { 'ensure-remote' }
-    $remoteResult = Invoke-PowerShellScript -ScriptPath $remoteScript
+    $remoteResult = Invoke-PowerShellScript -ScriptPath $remoteScript -Arguments @('-Yes', '-AllowPersistentRemotePublish')
     if ($remoteResult.exitCode -ne 0) {
       $state.lastResult = 'remote-publish-failed'
       $state.lastError = $remoteResult.output
@@ -358,7 +359,7 @@ try {
     $bindingIsPublic = Test-PublicBinding -Binding $binding
     if (-not $bindingIsPublic) {
       $state.lastResult = 'remote-publish-missing'
-      $state.lastError = 'Remote publish command completed, but app-binding.json is still not public-funnel.'
+      $state.lastError = 'public-funnel command completed, but app-binding.json is still not marked as public-funnel.'
       Complete-Execution -State $state -ExitCode 1
     }
 
