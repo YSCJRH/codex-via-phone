@@ -42,16 +42,7 @@
 
 ## 仓库边界
 
-公开发布只应该包含这个项目的最小可复用材料：
-
-- 覆盖层源码
-- 辅助脚本
-- 桌面控制工具源码
-- 部署、安全、贡献与发版审查所需文档
-
-不要把父目录中的其它私有项目、维护者内部说明、运行态证据、证书密钥或完整上游快照混进发布快照。
-
-如果你准备公开发布自己的 fork，请先阅读：
+如果你准备发布自己的 fork，请先阅读：
 
 - [docs/PRIVATE_LOCAL_ONLY.zh-CN.md](docs/PRIVATE_LOCAL_ONLY.zh-CN.md)
 - [docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md](docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md)
