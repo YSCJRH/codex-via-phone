@@ -628,6 +628,7 @@ function ChatInterface({
                 isUserScrolledUp={isUserScrolledUp}
                 hasMessages={chatMessages.length > 0}
                 onScrollToBottom={scrollToBottomAndReset}
+                variant="sheet"
               />
             </div>
           </div>

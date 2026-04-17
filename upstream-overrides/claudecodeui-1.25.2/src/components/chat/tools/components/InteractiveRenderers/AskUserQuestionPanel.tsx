@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { PermissionPanelProps } from '../../configs/permissionPanelRegistry';
 import type { Question } from '../../../types/types';
 
@@ -22,7 +22,6 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  // Focus the container for keyboard events when step changes
   useEffect(() => {
     if (!otherActive.get(currentStep)) {
       containerRef.current?.focus();
@@ -36,111 +35,166 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
   }, [otherActive, currentStep]);
 
   const toggleOption = useCallback((qIdx: number, label: string, multiSelect: boolean) => {
-    setSelections(prev => {
+    setSelections((prev) => {
       const next = new Map(prev);
       const current = new Set(next.get(qIdx) || []);
+
       if (multiSelect) {
-        if (current.has(label)) current.delete(label);
-        else current.add(label);
+        if (current.has(label)) {
+          current.delete(label);
+        } else {
+          current.add(label);
+        }
       } else {
         current.clear();
         current.add(label);
-        setOtherActive(p => { const n = new Map(p); n.set(qIdx, false); return n; });
+        setOtherActive((previous) => {
+          const nextState = new Map(previous);
+          nextState.set(qIdx, false);
+          return nextState;
+        });
       }
+
       next.set(qIdx, current);
       return next;
     });
   }, []);
 
   const toggleOther = useCallback((qIdx: number, multiSelect: boolean) => {
-    setOtherActive(prev => {
+    setOtherActive((prev) => {
       const next = new Map(prev);
       const wasActive = next.get(qIdx) || false;
       next.set(qIdx, !wasActive);
+
       if (!multiSelect && !wasActive) {
-        setSelections(p => { const n = new Map(p); n.set(qIdx, new Set()); return n; });
+        setSelections((previous) => {
+          const nextSelections = new Map(previous);
+          nextSelections.set(qIdx, new Set());
+          return nextSelections;
+        });
       }
+
       return next;
     });
   }, []);
 
   const setOtherText = useCallback((qIdx: number, text: string) => {
-    setOtherTexts(prev => { const next = new Map(prev); next.set(qIdx, text); return next; });
+    setOtherTexts((prev) => {
+      const next = new Map(prev);
+      next.set(qIdx, text);
+      return next;
+    });
   }, []);
 
   const buildAnswers = useCallback(() => {
     const answers: Record<string, string> = {};
-    questions.forEach((q, idx) => {
-      const selected = Array.from(selections.get(idx) || []);
-      const isOther = otherActive.get(idx) || false;
-      const otherText = (otherTexts.get(idx) || '').trim();
-      if (isOther && otherText) selected.push(otherText);
-      if (selected.length > 0) answers[q.question] = selected.join(', ');
+
+    questions.forEach((question, index) => {
+      const selected = Array.from(selections.get(index) || []);
+      const isOther = otherActive.get(index) || false;
+      const otherText = (otherTexts.get(index) || '').trim();
+
+      if (isOther && otherText) {
+        selected.push(otherText);
+      }
+
+      if (selected.length > 0) {
+        answers[question.question] = selected.join(', ');
+      }
     });
+
     return answers;
   }, [questions, selections, otherActive, otherTexts]);
 
   const handleSubmit = useCallback(() => {
-    onDecision(request.requestId, { allow: true, updatedInput: { ...input, answers: buildAnswers() } });
+    onDecision(request.requestId, {
+      allow: true,
+      updatedInput: { ...input, answers: buildAnswers() },
+    });
   }, [onDecision, request.requestId, input, buildAnswers]);
 
   const handleSkip = useCallback(() => {
-    onDecision(request.requestId, { allow: true, updatedInput: { ...input, answers: {} } });
+    onDecision(request.requestId, {
+      allow: true,
+      updatedInput: { ...input, answers: {} },
+    });
   }, [onDecision, request.requestId, input]);
 
-  // Keyboard handler for number keys and navigation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Don't capture keys when typing in the "Other" input
-    if (e.target instanceof HTMLInputElement) return;
-
-    const q = questions[currentStep];
-    if (!q) return;
-    const multi = q.multiSelect || false;
-    const optCount = q.options.length;
-
-    // Number keys 1-9 for options
-    const num = parseInt(e.key);
-    if (!isNaN(num) && num >= 1 && num <= optCount) {
-      e.preventDefault();
-      toggleOption(currentStep, q.options[num - 1].label, multi);
+  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (event.target instanceof HTMLInputElement) {
       return;
     }
 
-    // 0 for "Other"
-    if (e.key === '0') {
-      e.preventDefault();
-      toggleOther(currentStep, multi);
+    const question = questions[currentStep];
+    if (!question) {
       return;
     }
 
-    // Enter to advance / submit
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const isLast = currentStep === questions.length - 1;
-      if (isLast) handleSubmit();
-      else setCurrentStep(s => s + 1);
+    const multiSelect = question.multiSelect || false;
+    const optionCount = question.options.length;
+    const keyAsNumber = Number.parseInt(event.key, 10);
+
+    if (!Number.isNaN(keyAsNumber) && keyAsNumber >= 1 && keyAsNumber <= optionCount) {
+      event.preventDefault();
+      toggleOption(currentStep, question.options[keyAsNumber - 1].label, multiSelect);
       return;
     }
 
-    // Escape to skip
-    if (e.key === 'Escape') {
-      e.preventDefault();
+    if (event.key === '0') {
+      event.preventDefault();
+      toggleOther(currentStep, multiSelect);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const isLastQuestion = currentStep === questions.length - 1;
+
+      if (isLastQuestion) {
+        handleSubmit();
+      } else {
+        setCurrentStep((step) => step + 1);
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
       handleSkip();
-      return;
     }
   }, [currentStep, questions, toggleOption, toggleOther, handleSubmit, handleSkip]);
 
-  if (questions.length === 0) return null;
+  if (questions.length === 0) {
+    return null;
+  }
 
   const total = questions.length;
   const isSingle = total === 1;
-  const q = questions[currentStep];
-  const multi = q.multiSelect || false;
+  const question = questions[currentStep];
+  const multiSelect = question.multiSelect || false;
   const selected = selections.get(currentStep) || new Set<string>();
-  const isOtherOn = otherActive.get(currentStep) || false;
+  const isOtherActive = otherActive.get(currentStep) || false;
   const isLast = currentStep === total - 1;
   const isFirst = currentStep === 0;
-  const hasCurrentSelection = selected.size > 0 || (isOtherOn && (otherTexts.get(currentStep) || '').trim().length > 0);
+  const hasCurrentSelection =
+    selected.size > 0 ||
+    (isOtherActive && (otherTexts.get(currentStep) || '').trim().length > 0);
+  const optionButtonClass = (active: boolean, dashed = false) =>
+    `group flex w-full items-center gap-2.5 rounded-[1.15rem] border px-3 py-2.5 text-left transition-all duration-150 ${
+      active
+        ? 'border-primary/30 bg-primary/10 ring-1 ring-primary/15'
+        : `${dashed ? 'border-dashed ' : ''}border-border/55 bg-background/55 hover:border-border hover:bg-muted/45`
+    }`;
+  const optionKeyClass = (active: boolean) =>
+    `flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[10px] transition-all duration-150 ${
+      active
+        ? 'bg-primary font-semibold text-primary-foreground'
+        : 'border border-border/50 bg-muted/45 text-muted-foreground'
+    }`;
+  const secondaryButtonClass =
+    'inline-flex items-center gap-1 rounded-xl border border-border/60 px-3 py-1.5 text-[11px] font-medium text-foreground transition-all duration-150 hover:bg-muted/50';
+  const primaryButtonClass =
+    'inline-flex items-center gap-1 rounded-xl bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90';
 
   return (
     <div
@@ -152,17 +206,24 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
       }`}
     >
       <div className="mobile-card mobile-shadow relative overflow-hidden">
-        {/* Accent line */}
         <div className="absolute left-0 right-0 top-0 h-[2px] bg-gradient-to-r from-blue-500 via-cyan-400 to-teal-400" />
 
-        {/* Header + Question — compact */}
         <div className="px-4 pb-2 pt-3.5">
           <div className="mb-1.5 flex items-center gap-2.5">
-            {/* Question icon */}
             <div className="relative flex-shrink-0">
               <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-cyan-500/10 dark:from-blue-400/15 dark:to-cyan-400/15">
-                <svg className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827m0 3h.01" />
+                <svg
+                  className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.75}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827m0 3h.01"
+                  />
                 </svg>
               </div>
               <div className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-cyan-400 dark:bg-cyan-500" />
@@ -172,33 +233,31 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
               <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
                 Input required
               </span>
-              {q.header && (
+              {question.header && (
                 <span className="mobile-pill inline-flex items-center px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-primary">
-                  {q.header}
+                  {question.header}
                 </span>
               )}
             </div>
 
-            {/* Step counter */}
             {!isSingle && (
-              <span className="flex-shrink-0 text-[10px] tabular-nums text-gray-400 dark:text-gray-500">
+              <span className="mobile-tabular flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500">
                 {currentStep + 1}/{total}
               </span>
             )}
           </div>
 
-          {/* Progress dots (multi-question) */}
           {!isSingle && (
             <div className="mb-2 flex items-center gap-1">
-              {questions.map((_, i) => (
+              {questions.map((_, index) => (
                 <button
-                  key={i}
+                  key={index}
                   type="button"
-                  onClick={() => setCurrentStep(i)}
+                  onClick={() => setCurrentStep(index)}
                   className={`h-[3px] rounded-full transition-all duration-300 ${
-                    i === currentStep
+                    index === currentStep
                       ? 'w-5 bg-blue-500 dark:bg-blue-400'
-                      : i < currentStep
+                      : index < currentStep
                         ? 'w-2.5 bg-blue-300 dark:bg-blue-600'
                         : 'w-2.5 bg-gray-200 dark:bg-gray-700'
                   }`}
@@ -207,62 +266,68 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
             </div>
           )}
 
-          {/* Question text */}
           <p className="text-[14px] font-medium leading-snug text-gray-900 dark:text-gray-100">
-            {q.question}
+            {question.question}
           </p>
-          {multi && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">Select all that apply</span>
+          {multiSelect && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+              Select all that apply
+            </span>
           )}
         </div>
 
-        {/* Options — tight spacing */}
-        <div className="scrollbar-thin max-h-48 overflow-y-auto px-4 pb-2" role={multi ? 'group' : 'radiogroup'} aria-label={q.question}>
-          <div className="space-y-1">
-            {q.options.map((opt, optIdx) => {
-              const isSelected = selected.has(opt.label);
+        <div
+          className="scrollbar-thin max-h-48 overflow-y-auto px-4 pb-2"
+          role={multiSelect ? 'group' : 'radiogroup'}
+          aria-label={question.question}
+        >
+          <div className="space-y-1.5">
+            {question.options.map((option, optionIndex) => {
+              const isSelected = selected.has(option.label);
+
               return (
                 <button
-                  key={opt.label}
+                  key={option.label}
                   type="button"
-                  onClick={() => toggleOption(currentStep, opt.label, multi)}
-                  className={`group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
-                    isSelected
-                      ? 'border-blue-300 bg-blue-50/80 ring-1 ring-blue-200/50 dark:border-blue-600 dark:bg-blue-900/25 dark:ring-blue-700/30'
-                      : 'dark:hover:bg-gray-750/50 border-gray-200 hover:border-gray-300 hover:bg-gray-50/60 dark:border-gray-700/60 dark:hover:border-gray-600'
-                  }`}
+                  onClick={() => toggleOption(currentStep, option.label, multiSelect)}
+                  aria-pressed={isSelected}
+                  className={optionButtonClass(isSelected)}
                 >
-                  {/* Keyboard hint */}
-                  <kbd className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[10px] transition-all duration-150 ${
-                    isSelected
-                      ? 'bg-blue-500 font-semibold text-white dark:bg-blue-500'
-                      : 'border border-gray-200 bg-gray-100 text-gray-400 group-hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 dark:group-hover:border-gray-600'
-                  }`}>
-                    {optIdx + 1}
+                  <kbd className={optionKeyClass(isSelected)}>
+                    {optionIndex + 1}
                   </kbd>
 
                   <div className="min-w-0 flex-1">
-                    <div className={`text-[13px] leading-tight transition-colors duration-150 ${
-                      isSelected
-                        ? 'font-medium text-gray-900 dark:text-gray-100'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}>
-                      {opt.label}
-                    </div>
-                    {opt.description && (
-                      <div className={`text-[11px] leading-snug transition-colors duration-150 ${
+                    <div
+                      className={`text-[13px] leading-tight transition-colors duration-150 ${
                         isSelected
-                          ? 'text-blue-600/70 dark:text-blue-300/70'
-                          : 'text-gray-400 dark:text-gray-500'
-                      }`}>
-                        {opt.description}
+                          ? 'font-medium text-gray-900 dark:text-gray-100'
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {option.label}
+                    </div>
+                    {option.description && (
+                      <div
+                        className={`text-[11px] leading-snug transition-colors duration-150 ${
+                          isSelected
+                            ? 'text-blue-600/70 dark:text-blue-300/70'
+                            : 'text-gray-400 dark:text-gray-500'
+                        }`}
+                      >
+                        {option.description}
                       </div>
                     )}
                   </div>
 
-                  {/* Selection check */}
                   {isSelected && (
-                    <svg className="h-4 w-4 flex-shrink-0 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <svg
+                      className="h-4 w-4 flex-shrink-0 text-blue-500 dark:text-blue-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2.5}
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
                   )}
@@ -270,57 +335,58 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
               );
             })}
 
-            {/* "Other" option */}
             <button
               type="button"
-              onClick={() => toggleOther(currentStep, multi)}
-              className={`group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
-                isOtherOn
-                  ? 'border-blue-300 bg-blue-50/80 ring-1 ring-blue-200/50 dark:border-blue-600 dark:bg-blue-900/25 dark:ring-blue-700/30'
-                  : 'dark:hover:bg-gray-750/50 border-dashed border-gray-200 hover:border-gray-300 hover:bg-gray-50/60 dark:border-gray-700/60 dark:hover:border-gray-600'
-              }`}
+              onClick={() => toggleOther(currentStep, multiSelect)}
+              aria-pressed={isOtherActive}
+              className={optionButtonClass(isOtherActive, true)}
             >
-              <kbd className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[10px] transition-all duration-150 ${
-                isOtherOn
-                  ? 'bg-blue-500 font-semibold text-white dark:bg-blue-500'
-                  : 'border border-gray-200 bg-gray-100 text-gray-400 group-hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 dark:group-hover:border-gray-600'
-              }`}>
+              <kbd className={optionKeyClass(isOtherActive)}>
                 0
               </kbd>
-              <span className={`text-[13px] leading-tight transition-colors ${
-                isOtherOn
-                  ? 'font-medium text-gray-900 dark:text-gray-100'
-                  : 'text-gray-500 dark:text-gray-400'
-              }`}>
+              <span
+                className={`text-[13px] leading-tight transition-colors ${
+                  isOtherActive
+                    ? 'font-medium text-gray-900 dark:text-gray-100'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
                 Other...
               </span>
-              {isOtherOn && (
-                <svg className="ml-auto h-4 w-4 flex-shrink-0 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              {isOtherActive && (
+                <svg
+                  className="ml-auto h-4 w-4 flex-shrink-0 text-blue-500 dark:text-blue-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2.5}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
               )}
             </button>
 
-            {/* Other text input — inline */}
-            {isOtherOn && (
+            {isOtherActive && (
               <div className="pl-[30px] pr-0.5">
                 <div className="relative">
                   <input
                     ref={otherInputRef}
                     type="text"
                     value={otherTexts.get(currentStep) || ''}
-                    onChange={(e) => setOtherText(currentStep, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (isLast) handleSubmit();
-                        else setCurrentStep(s => s + 1);
+                    onChange={(event) => setOtherText(currentStep, event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (isLast) {
+                          handleSubmit();
+                        } else {
+                          setCurrentStep((step) => step + 1);
+                        }
                       }
-                      // Prevent container keydown from firing
-                      e.stopPropagation();
+                      event.stopPropagation();
                     }}
                     placeholder="Type your answer..."
-                    className="w-full rounded-lg border border-border/50 bg-muted/35 px-3 py-1.5 text-[13px] text-foreground outline-none transition-shadow duration-200 placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20"
+                    className="w-full rounded-xl border border-border/50 bg-muted/35 px-3 py-2 text-[13px] text-foreground outline-none transition-shadow duration-200 placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20"
                   />
                   <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border/50 bg-background px-1 py-0.5 font-mono text-[9px] text-muted-foreground">
                     Enter
@@ -331,7 +397,6 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
           </div>
         </div>
 
-        {/* Footer — compact */}
         <div className="flex items-center justify-between gap-2 border-t border-border/40 bg-background/70 px-4 py-2">
           <button
             type="button"
@@ -346,8 +411,8 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
             {!isSingle && !isFirst && (
               <button
                 type="button"
-                onClick={() => setCurrentStep(s => s - 1)}
-                className="inline-flex items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-all duration-150 hover:bg-muted/50"
+                onClick={() => setCurrentStep((step) => step - 1)}
+                className={secondaryButtonClass}
               >
                 <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -361,7 +426,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                 type="button"
                 onClick={handleSubmit}
                 disabled={!hasCurrentSelection && !Object.keys(buildAnswers()).length}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
+                className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none`}
               >
                 Submit
                 <span className="ml-0.5 font-mono text-[9px] opacity-70">Enter</span>
@@ -369,8 +434,8 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={() => setCurrentStep(s => s + 1)}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90"
+                onClick={() => setCurrentStep((step) => step + 1)}
+                className={primaryButtonClass}
               >
                 Next
                 <span className="ml-0.5 font-mono text-[9px] opacity-70">Enter</span>
