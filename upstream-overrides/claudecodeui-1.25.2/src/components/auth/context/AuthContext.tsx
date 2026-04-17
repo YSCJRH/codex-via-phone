@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { IS_PLATFORM } from '../../../constants/config';
 import { api } from '../../../utils/api';
-import { clearDeviceSession, getDeviceIdentity, signDeviceChallenge, storeDeviceSession } from '../deviceTrust.js';
+import { clearDeviceSession, getDeviceIdentity, signDeviceChallenge } from '../deviceTrust.js';
 import { AUTH_ERROR_MESSAGES } from '../constants';
 import type {
   AuthContextValue,
@@ -159,14 +159,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return { success: false, error: message };
         }
 
-        if (payload.token) {
-          storeDeviceSession({
-            token: payload.token,
-            username: payload.user.username,
-            deviceId: deviceIdentity.deviceId,
-            deviceKeyThumbprint: deviceIdentity.deviceKeyThumbprint,
-          });
-        }
         setSession(payload.user);
         setNeedsSetup(false);
         await checkOnboardingStatus();
@@ -195,14 +187,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return { success: false, error: message };
         }
 
-        if (payload.token) {
-          storeDeviceSession({
-            token: payload.token,
-            username: payload.user.username,
-            deviceId: deviceIdentity.deviceId,
-            deviceKeyThumbprint: deviceIdentity.deviceKeyThumbprint,
-          });
-        }
         setSession(payload.user);
         setNeedsSetup(false);
         await checkOnboardingStatus();

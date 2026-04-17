@@ -42,6 +42,8 @@ legacy direct 已经不属于默认边界，只保留为迁移检测状态。
 
 已批准设备还应绑定 WebCrypto 设备密钥。localStorage UUID 可以继续作为设备记录的标识，但不应再被当作唯一信任根。
 
+浏览器会话也应保持 cookie-first。默认 Web 登录流程不应再把 auth bearer token 导出到浏览器存储，除非存在经过审查的明确需求。
+
 Web 访问默认应满足这三点：
 
 - 先经过本机 nginx 代理入口

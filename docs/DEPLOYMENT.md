@@ -198,6 +198,8 @@ The approval poll stays on `/api/auth/device-approval` and uses a short-lived `h
 
 After a device is approved, later sign-ins from that same browser must complete a short-lived device-key challenge. If you are migrating from an older UUID-only approval record, expect one re-approval so the device key can be registered.
 
+After sign-in succeeds, the browser should continue with the same-origin auth cookie. You do not need to copy or persist a bearer token in browser storage for the normal web path.
+
 Do not skip this. It is part of the default trust boundary.
 
 ## Read-Only Inspection Scripts

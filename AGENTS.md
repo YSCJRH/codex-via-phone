@@ -23,6 +23,7 @@ Use it when a user asks to install, bootstrap, verify, or explain this repositor
 - Treat `.runtime/mode-config.json` as the boundary source for both mode and reviewed browser Origins.
 - Approval polling is cookie-backed at `/api/auth/device-approval`; do not rely on request-token URLs.
 - Approved devices are expected to hold a WebCrypto device key; UUID alone is not the long-term trust root.
+- Keep browser sessions cookie-first. Do not default to persisting auth bearer tokens in localStorage for same-origin web use.
 - Do not show personal hostnames, private IPs, request tokens, device IDs, Windows usernames, or absolute local paths by default.
 
 ## Current Install Workflow

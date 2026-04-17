@@ -100,7 +100,7 @@ const issueAuthSession = (req, res, user, deviceMetadata = null) => {
 
   return {
     success: true,
-    token,
+    sessionTransport: 'cookie',
     user: sanitizeUser(user),
   };
 };

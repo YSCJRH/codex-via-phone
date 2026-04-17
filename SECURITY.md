@@ -42,6 +42,8 @@ Device approval polling should stay on the cookie-backed `/api/auth/device-appro
 
 Approved devices should be tied to a WebCrypto device key. A localStorage UUID may still identify the device record, but it should not be treated as the only trust root anymore.
 
+Browser sessions should remain cookie-first. The default web login flow should not export the auth bearer token into browser storage unless there is an explicitly reviewed need.
+
 Web access should stay behind explicit allowlists:
 
 - the app should normally be reached through the local nginx proxy path

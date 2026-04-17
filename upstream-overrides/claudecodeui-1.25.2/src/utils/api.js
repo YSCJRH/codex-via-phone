@@ -1,5 +1,5 @@
 import { IS_CODEX_ONLY_HARDENED, IS_PLATFORM } from "../constants/config";
-import { getDeviceIdentity, getStoredDeviceSession } from "../components/auth/deviceTrust.js";
+import { getDeviceIdentity } from "../components/auth/deviceTrust.js";
 
 // Utility function for authenticated API calls
 export const authenticatedFetch = (url, options = {}) => {
@@ -10,7 +10,6 @@ export const authenticatedFetch = (url, options = {}) => {
     ...requestOptions
   } = options;
   const defaultHeaders = {};
-  const deviceSession = getStoredDeviceSession();
   const controller =
     !signal && timeoutMs > 0 && typeof AbortController !== 'undefined'
       ? new AbortController()
@@ -31,7 +30,6 @@ export const authenticatedFetch = (url, options = {}) => {
     signal: signal || controller?.signal,
     headers: {
       ...defaultHeaders,
-      ...(deviceSession?.token ? { Authorization: `Bearer ${deviceSession.token}` } : {}),
       ...customHeaders,
     },
   });

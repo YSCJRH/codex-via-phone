@@ -47,6 +47,7 @@ Phone browser
 - Keep approval polling on a cookie-backed path instead of exposing request tokens in URLs
 - Approved devices are bound to a browser-held device key, not just a localStorage UUID
 - Legacy trusted devices must be re-approved once to register a device key
+- Browser sessions are cookie-first. The default login flow no longer needs a bearer token in localStorage.
 - Treat the browser Origin allowlist in `.runtime/mode-config.json` as the remote web entry contract
 - Keep hardened mode enabled by default
 - Treat `.runtime/mode-config.json` as the boundary configuration source
