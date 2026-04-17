@@ -110,6 +110,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 
 如果你准备发布自己的 fork，请先阅读 `docs/PRIVATE_LOCAL_ONLY.zh-CN.md` 和 `docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md`，再组装 staging 发布副本。
 
+公开发布应当来自脱敏后的 staging 副本，并通过 `Open Source Gate` 工作流和 `scripts/check-open-source-tree.ps1` 检查。
+
 ## 致谢
 
 本项目建立在上游 [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) 的基础上，定位是一个更聚焦的辅助层，重点服务于手机访问、可信设备审批，以及本地 Codex 工作流的更安全接入。

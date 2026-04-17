@@ -110,6 +110,8 @@ powershell -ExecutionPolicy Bypass -File scripts/install-mobile-codex.ps1 -Mode 
 
 If you plan to publish a fork, review `docs/PRIVATE_LOCAL_ONLY.md` and `docs/OPEN_SOURCE_RELEASE_CHECKLIST.md` before you assemble a staging snapshot.
 
+Public releases should come from a sanitized staging copy and pass the `Open Source Gate` workflow plus `scripts/check-open-source-tree.ps1`.
+
 ## Acknowledgements
 
 This project is built on top of [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui). It is a narrower helper layer focused on phone access, trusted-device approval, and safer access modes for local Codex workflows.

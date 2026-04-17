@@ -88,6 +88,7 @@ legacy direct 已经不属于默认边界，只保留作迁移检测。
 公开推送前，至少要检查：
 
 - `scripts/check-open-source-tree.ps1`
+- `.github/workflows/open-source-gate.yml`
 - `docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md`
 
 这些检查应该在脱敏后的 staging 副本里执行，而不是把仍在运行的私有工作树直接当作可发布快照。

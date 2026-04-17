@@ -11,11 +11,19 @@ tmp/
 build/
 dist/
 .npm-cache/
+logs/
+diagnostics/
+screenshots/
+images/
 *.log
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 *.jsonl
+*.har
+*.pcap
 *.tar
 *.gz
 *.tgz
@@ -30,6 +38,7 @@ dist/
 
 # Local environment files
 .env
+.env.*
 !.env.example
 _tmp_check_mobile_codex_state.mjs
 known_hosts

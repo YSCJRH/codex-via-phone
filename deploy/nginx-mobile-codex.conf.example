@@ -26,8 +26,8 @@ server {
     add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://codex.example.com" always;
 
     # Optional: only allow your VPN/LAN IP space.
-    # allow 100.64.0.0/10;
-    # allow 192.168.0.0/16;
+    # allow <TAILNET_CIDR>;
+    # allow <PRIVATE_LAN_CIDR>;
     # deny all;
 
     location = /api/auth/login {

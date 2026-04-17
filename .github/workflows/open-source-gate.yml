@@ -1,0 +1,52 @@
+name: Open Source Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  open-source-gate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify required public docs exist
+        shell: pwsh
+        run: |
+          $requiredPaths = @(
+            'README.md',
+            'README.en.md',
+            'SECURITY.md',
+            'SECURITY.zh-CN.md',
+            'NOTICE.md',
+            'NOTICE.zh-CN.md',
+            'AGENTS.md',
+            'docs/DEPLOYMENT.md',
+            'docs/DEPLOYMENT.zh-CN.md',
+            'docs/ARCHITECTURE.md',
+            'docs/ARCHITECTURE.zh-CN.md',
+            'docs/OPEN_SOURCE_RELEASE_CHECKLIST.md',
+            'docs/OPEN_SOURCE_RELEASE_CHECKLIST.zh-CN.md'
+          )
+          $missing = $requiredPaths | Where-Object { -not (Test-Path $_) }
+          if ($missing.Count -gt 0) {
+            $missing | ForEach-Object { Write-Error "Missing required public doc: $_" }
+            exit 1
+          }
+
+      - name: Run open-source tree check
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-open-source-tree.ps1
+
+      - name: Verify mobile_codex_control.py syntax
+        shell: pwsh
+        run: python -m py_compile mobile_codex_control.py

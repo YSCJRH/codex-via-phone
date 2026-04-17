@@ -12,7 +12,7 @@
 
     # Preferred: expose this hostname only through Tailscale / private DNS.
     # Optional: restrict source IPs if your proxy host already sees stable client IPs.
-    # @blocked not remote_ip 100.64.0.0/10 192.168.0.0/16
+    # @blocked not remote_ip <TAILNET_CIDR> <PRIVATE_LAN_CIDR>
     # respond @blocked 403
 
     # Optional extra gate in front of app login.

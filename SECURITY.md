@@ -88,6 +88,7 @@ See [docs/PRIVATE_LOCAL_ONLY.md](docs/PRIVATE_LOCAL_ONLY.md).
 Before a public push, review:
 
 - `scripts/check-open-source-tree.ps1`
+- `.github/workflows/open-source-gate.yml`
 - `docs/OPEN_SOURCE_RELEASE_CHECKLIST.md`
 
 Run those checks against a sanitized staging copy instead of treating a live private working tree as publish-ready.
