@@ -26,11 +26,7 @@
 - [ ] 确认图片文件默认不存在，除非它们属于显式 allowlist 的公开文档资源
 - [ ] 当前 allowlist 的公开文档资源：
   - `docs/assets/mobile-codex-control-console.png`
-  - `docs/assets/readme/mobile-hero-collage.png`
-  - `docs/assets/readme/mobile-home-real-device.png`
-  - `docs/assets/readme/mobile-chat-real-device.png`
-  - `docs/assets/readme/mobile-approval-real-device.png`
-- [ ] 确认 README 首页图和真机预览图库只使用以上 allowlist 资源
+- [ ] 只有在截图来自当前真实产品并完成显式 allowlist 后，才能把 README 图库图公开发布
 
 ## 敏感文本扫描
 

@@ -11,38 +11,12 @@ It is designed for one clear workflow:
 - you want to send the next prompt from the phone and let the PC continue the local Codex session
 - you want first-time device approval on the desktop before a new phone can log in
 
-<p align="center">
-  <img src="docs/assets/readme/mobile-hero-collage.png" alt="Real-device mobile preview for codex-via-phone" width="100%" />
-</p>
-
-<p align="center"><em>Real-device tested mobile experience across iPhone Safari, iOS PWA, and Android Chrome.</em></p>
-
 ## What You Can Do
 
 - View Codex projects and threads from a phone browser
 - Continue an existing Codex session from the phone
 - Approve the first login of a new mobile device from the desktop tool
 - Monitor local service health, access mode, and device approvals from the Windows desktop control tool
-
-## Mobile Preview
-
-### Home On A Real Device
-
-![Mobile home on a real device](docs/assets/readme/mobile-home-real-device.png)
-
-The project list, quick entry points, and mobile-first navigation were verified on real phones and exported as sanitized public docs assets.
-
-### Chat View On A Real Device
-
-![Mobile chat view on a real device](docs/assets/readme/mobile-chat-real-device.png)
-
-The immersive chat layout, session controls, and bottom composer flow were captured from the current mobile redesign instead of mockups.
-
-### Approval And Controlled Interaction
-
-![Mobile approval and controlled interaction on a real device](docs/assets/readme/mobile-approval-real-device.png)
-
-Permission prompts and desktop-review flows were validated on real devices before being published as README visuals.
 
 ## Access Modes
 

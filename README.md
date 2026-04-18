@@ -11,38 +11,12 @@
 - 你希望从手机发送下一条提示词，让电脑继续本地 Codex 会话
 - 你希望每台新设备第一次登录时，都先经过桌面端审批
 
-<p align="center">
-  <img src="docs/assets/readme/mobile-hero-collage.png" alt="codex-via-phone 真机移动端首页图" width="100%" />
-</p>
-
-<p align="center"><em>基于 iPhone Safari、iOS PWA 与 Android Chrome 的真机验证移动端体验。</em></p>
-
 ## 你可以用它做什么
 
 - 在手机浏览器里查看 Codex 项目和会话
 - 从手机续接一个已有的 Codex 会话
 - 在桌面控制工具里批准新手机的首次登录
 - 在 Windows 桌面控制工具里查看本地服务状态、访问模式和设备审批状态
-
-## 真机预览
-
-### 首页真机视图
-
-![手机端首页真机图](docs/assets/readme/mobile-home-real-device.png)
-
-项目列表、快捷入口和移动端主导航都经过真机验证，并以脱敏后的公开资源形式进入 README。
-
-### 会话页真机视图
-
-![手机端会话页真机图](docs/assets/readme/mobile-chat-real-device.png)
-
-沉浸式聊天布局、会话控制区和底部输入区来自当前移动端重构后的真实界面，而不是演示 mockup。
-
-### 审批与受控交互
-
-![手机端审批与受控交互真机图](docs/assets/readme/mobile-approval-real-device.png)
-
-权限提示、桌面审批和受控交互流也已做真机验证，再以脱敏后的形式公开展示。
 
 ## 访问模式
 
