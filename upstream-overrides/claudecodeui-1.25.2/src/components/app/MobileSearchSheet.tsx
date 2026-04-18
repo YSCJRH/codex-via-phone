@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, MessageSquareText, Search, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Clock3,
+  Loader2,
+  MessageSquareText,
+  Search,
+  SearchSlash,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import type { Project, ProjectSession, SessionProvider } from '../../types/app';
 import { api } from '../../utils/api';
 import { getAllSessions } from '../sidebar/utils/utils';
@@ -49,6 +58,11 @@ type MobileSearchSheetProps = {
   onSessionSelect: (session: ProjectSession) => void;
 };
 
+type ProjectSearchCard = {
+  project: Project;
+  sessions: ProjectSession[];
+};
+
 function normalizeProvider(value?: string): SessionProvider {
   if (value === 'cursor' || value === 'gemini' || value === 'codex') {
     return value;
@@ -71,6 +85,32 @@ function formatRelativeTime(value?: string | null) {
   if (diffMinutes < 60) return `${diffMinutes} min ago`;
   if (diffMinutes < 24 * 60) return `${Math.round(diffMinutes / 60)} hr ago`;
   return `${Math.round(diffMinutes / (60 * 24))} d ago`;
+}
+
+function getProviderLabel(value?: string) {
+  return normalizeProvider(value).toUpperCase();
+}
+
+function EmptyState({
+  title,
+  description,
+  searching = false,
+}: {
+  title: string;
+  description: string;
+  searching?: boolean;
+}) {
+  const Icon = searching ? Loader2 : SearchSlash;
+
+  return (
+    <div className="mobile-card mobile-shadow p-6 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Icon className={`h-5 w-5 ${searching ? 'animate-spin' : ''}`} />
+      </div>
+      <div className="mt-4 text-[16px] font-semibold text-foreground">{title}</div>
+      <div className="mt-2 text-[14px] leading-6 mobile-muted-text">{description}</div>
+    </div>
+  );
 }
 
 export default function MobileSearchSheet({
@@ -101,6 +141,19 @@ export default function MobileSearchSheet({
       return projectName.includes(normalizedQuery) || displayName.includes(normalizedQuery);
     });
   }, [projects, query]);
+
+  const projectCards = useMemo<ProjectSearchCard[]>(() => {
+    return filteredProjects.map((project) => ({
+      project,
+      sessions: getAllSessions(project, {}).slice(0, query.trim() ? 6 : 3) as ProjectSession[],
+    }));
+  }, [filteredProjects, query]);
+
+  const conversationProjectCount = conversationResults?.results.length || 0;
+  const conversationSessionCount = useMemo(
+    () => conversationResults?.results.reduce((sum, project) => sum + project.sessions.length, 0) || 0,
+    [conversationResults]
+  );
 
   useEffect(() => {
     if (!open) {
@@ -281,45 +334,93 @@ export default function MobileSearchSheet({
               type="button"
               onClick={() => setMode(item.id as 'projects' | 'conversations')}
               className={`rounded-[18px] px-4 py-3 text-sm font-medium transition-colors ${
-                mode === item.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'mobile-pill text-foreground'
+                mode === item.id ? 'bg-primary text-primary-foreground' : 'mobile-pill text-foreground'
               }`}
             >
               {item.label}
             </button>
           ))}
         </div>
+
+        <div className="mt-4 mobile-card px-4 py-3">
+          <div className="flex items-start gap-3">
+            <div className="mobile-pill inline-flex h-10 w-10 flex-shrink-0 items-center justify-center text-primary">
+              <Sparkles className="h-4.5 w-4.5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-medium uppercase tracking-[0.12em] mobile-muted-text">
+                Search summary
+              </div>
+              {mode === 'projects' ? (
+                <>
+                  <div className="mt-2 text-[15px] font-medium leading-6 text-foreground">
+                    {query.trim()
+                      ? `Showing ${projectCards.length} matching projects`
+                      : `Browse ${projectCards.length} available projects`}
+                  </div>
+                  <div className="mt-1 text-[13px] leading-5 mobile-muted-text">
+                    Search by project name, then jump straight into the workspace or one of its recent sessions.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="mobile-pill px-3 py-1 text-[12px] font-medium text-foreground">
+                      {query.trim() ? `${conversationProjectCount} projects` : 'Waiting for query'}
+                    </span>
+                    <span className="mobile-pill px-3 py-1 text-[12px] font-medium text-foreground">
+                      {query.trim() ? `${conversationSessionCount} sessions` : '2+ chars needed'}
+                    </span>
+                    {conversationResults ? (
+                      <span className="mobile-pill px-3 py-1 text-[12px] font-medium text-primary">
+                        {conversationResults.totalMatches} matches
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 text-[13px] leading-5 mobile-muted-text">
+                    Stream full-text search across projects, then reopen the exact thread from its first matching snippet.
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
         {mode === 'projects' ? (
           <div className="space-y-4">
-            {filteredProjects.map((project) => {
-              const sessions = getAllSessions(project, {}).slice(0, query.trim() ? 6 : 3);
-              return (
-                <section key={project.name} className="mobile-card mobile-shadow p-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onProjectSelect(project);
-                      onClose();
-                    }}
-                    className="flex w-full items-center justify-between gap-3 text-left"
-                  >
-                    <div className="min-w-0">
+            {projectCards.map(({ project, sessions }) => (
+              <section key={project.name} className="mobile-card mobile-shadow p-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onProjectSelect(project);
+                    onClose();
+                  }}
+                  className="flex w-full items-start justify-between gap-3 text-left"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <div className="mobile-clamp-1 text-[17px] font-semibold text-foreground">
                         {project.displayName || project.name}
                       </div>
-                      <div className="mt-1 text-[13px] mobile-muted-text">
-                        {sessions.length ? `${sessions.length} recent sessions` : 'No sessions yet'}
-                      </div>
+                      <span className="mobile-pill px-2.5 py-1 text-[11px] font-medium text-foreground">
+                        {sessions.length ? `${sessions.length} recent` : 'Empty'}
+                      </span>
                     </div>
-                    <div className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-                      Open
+                    <div className="mt-1 text-[13px] mobile-muted-text">
+                      {sessions.length
+                        ? 'Open the project or jump into one of its latest conversations.'
+                        : 'This project is available, but it does not have recent sessions yet.'}
                     </div>
-                  </button>
+                  </div>
+                  <div className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                    Open
+                  </div>
+                </button>
 
+                {sessions.length ? (
                   <div className="mt-3 space-y-2">
                     {sessions.map((session) => (
                       <button
@@ -329,28 +430,41 @@ export default function MobileSearchSheet({
                           onSessionSelect(session as ProjectSession);
                           onClose();
                         }}
-                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-muted/40"
+                        className="flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-background/45 px-3 py-3 text-left transition-colors hover:bg-muted/40"
                       >
-                        <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-primary/60" />
+                        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <MessageSquareText className="h-4 w-4" />
+                        </div>
                         <div className="min-w-0 flex-1">
-                          <div className="mobile-clamp-1 text-[14px] text-foreground">
+                          <div className="mobile-clamp-1 text-[14px] font-medium text-foreground">
                             {String((session as Record<string, unknown>).summary || (session as Record<string, unknown>).name || 'Conversation')}
                           </div>
+                          <div className="mt-1 text-[12px] leading-5 mobile-muted-text">
+                            Recent thread inside this project
+                          </div>
                         </div>
-                        <div className="mobile-tabular text-[12px] mobile-muted-text">
-                          {formatRelativeTime(String((session as Record<string, unknown>).lastActivity || (session as Record<string, unknown>).createdAt || ''))}
+                        <div className="flex items-center gap-1.5 text-[12px] mobile-muted-text">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          <span className="mobile-tabular">
+                            {formatRelativeTime(String((session as Record<string, unknown>).lastActivity || (session as Record<string, unknown>).createdAt || ''))}
+                          </span>
                         </div>
                       </button>
                     ))}
                   </div>
-                </section>
-              );
-            })}
+                ) : (
+                  <div className="mt-3 rounded-2xl border border-dashed border-border/50 bg-background/35 px-4 py-4 text-[13px] leading-5 mobile-muted-text">
+                    No recent sessions yet. Open the project to start a new conversation from mobile.
+                  </div>
+                )}
+              </section>
+            ))}
 
-            {!filteredProjects.length ? (
-              <div className="mobile-card p-6 text-center text-[14px] mobile-muted-text">
-                No matching projects found.
-              </div>
+            {!projectCards.length ? (
+              <EmptyState
+                title="No matching projects"
+                description="Try a different project name, or clear the search to browse everything again."
+              />
             ) : null}
           </div>
         ) : (
@@ -366,9 +480,20 @@ export default function MobileSearchSheet({
 
             {conversationResults?.results.map((projectResult) => (
               <section key={projectResult.projectName} className="mobile-card mobile-shadow p-4">
-                <div className="text-[16px] font-semibold text-foreground">
-                  {projectResult.projectDisplayName || projectResult.projectName}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="mobile-clamp-1 text-[16px] font-semibold text-foreground">
+                      {projectResult.projectDisplayName || projectResult.projectName}
+                    </div>
+                    <div className="mt-1 text-[13px] leading-5 mobile-muted-text">
+                      {`${projectResult.sessions.length} matching sessions in this project`}
+                    </div>
+                  </div>
+                  <span className="mobile-pill px-3 py-1 text-[11px] font-medium text-primary">
+                    Matched
+                  </span>
                 </div>
+
                 <div className="mt-3 space-y-3">
                   {projectResult.sessions.map((session) => (
                     <button
@@ -383,24 +508,35 @@ export default function MobileSearchSheet({
                         } as ProjectSession);
                         onClose();
                       }}
-                      className="mobile-pill block w-full px-4 py-3 text-left"
+                      className="block w-full rounded-[1.3rem] border border-border/45 bg-background/55 px-4 py-4 text-left transition-colors hover:bg-muted/40"
                     >
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 rounded-full bg-primary/10 p-2 text-primary">
                           <MessageSquareText className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="mobile-clamp-1 text-[14px] font-medium text-foreground">
-                            {session.sessionSummary || 'Conversation'}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="mobile-clamp-1 text-[14px] font-medium text-foreground">
+                              {session.sessionSummary || 'Conversation'}
+                            </div>
+                            <span className="mobile-pill px-2 py-0.5 text-[10px] font-medium text-foreground">
+                              {getProviderLabel(session.provider || session.matches[0]?.provider)}
+                            </span>
+                            <span className="mobile-pill px-2 py-0.5 text-[10px] font-medium text-primary">
+                              {`${session.matches.length} hit${session.matches.length === 1 ? '' : 's'}`}
+                            </span>
                           </div>
                           {session.matches[0] ? (
-                            <div className="mobile-clamp-3 mt-1 text-[13px] leading-6 mobile-muted-text">
+                            <div className="mt-2 rounded-2xl bg-muted/35 px-3 py-3 text-[13px] leading-6 mobile-subtle-text">
                               {session.matches[0].snippet}
                             </div>
                           ) : null}
                         </div>
-                        <div className="mobile-tabular text-[12px] mobile-muted-text">
-                          {formatRelativeTime(session.matches[0]?.timestamp || null)}
+                        <div className="flex items-center gap-1.5 text-[12px] mobile-muted-text">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          <span className="mobile-tabular">
+                            {formatRelativeTime(session.matches[0]?.timestamp || null)}
+                          </span>
                         </div>
                       </div>
                     </button>
@@ -409,16 +545,18 @@ export default function MobileSearchSheet({
               </section>
             ))}
 
-            {!isSearching && conversationResults && conversationResults.results.length === 0 ? (
-              <div className="mobile-card p-6 text-center text-[14px] mobile-muted-text">
-                No matching conversation content found.
-              </div>
+            {!query.trim() ? (
+              <EmptyState
+                title="Search inside conversations"
+                description="Enter at least two characters to start streaming a full-text conversation search across your projects."
+              />
             ) : null}
 
-            {!query.trim() ? (
-              <div className="mobile-card p-6 text-center text-[14px] mobile-muted-text">
-                Enter at least two characters to start streaming a conversation search.
-              </div>
+            {!isSearching && conversationResults && conversationResults.results.length === 0 ? (
+              <EmptyState
+                title="No matching conversation content"
+                description="Try a broader phrase, or switch to Projects if you only need to find the workspace first."
+              />
             ) : null}
           </div>
         )}
