@@ -69,7 +69,11 @@ $imageExtensions = @(
 )
 
 $allowedImageRelativePaths = @(
-  'docs/assets/mobile-codex-control-console.png'
+  'docs/assets/mobile-codex-control-console.png',
+  'docs/assets/readme/mobile-hero-collage.png',
+  'docs/assets/readme/mobile-home-real-device.png',
+  'docs/assets/readme/mobile-chat-real-device.png',
+  'docs/assets/readme/mobile-approval-real-device.png'
 )
 
 $searchableExtensions = @(

@@ -24,8 +24,13 @@ Use this checklist before the first public push or before tagging a release from
 
 - [ ] Confirm no screenshots or runtime evidence from a personal environment remain in the tree
 - [ ] Confirm image files are absent unless they are explicitly allowlisted public docs assets
-- [ ] Current allowlisted public docs asset:
+- [ ] Current allowlisted public docs assets:
   - `docs/assets/mobile-codex-control-console.png`
+  - `docs/assets/readme/mobile-hero-collage.png`
+  - `docs/assets/readme/mobile-home-real-device.png`
+  - `docs/assets/readme/mobile-chat-real-device.png`
+  - `docs/assets/readme/mobile-approval-real-device.png`
+- [ ] Confirm the README hero image and preview gallery use only those allowlisted docs assets
 
 ## Sensitive Text Scan
 
