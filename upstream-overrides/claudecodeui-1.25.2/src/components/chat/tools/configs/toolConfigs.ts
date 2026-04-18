@@ -312,7 +312,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
         if (input.taskId) parts.push(`#${input.taskId}`);
         if (input.status) parts.push(input.status);
         if (input.subject) parts.push(`"${input.subject}"`);
-        return parts.join(' → ') || 'updating';
+        return parts.join(' -> ') || 'updating';
       },
       action: 'none',
       colorScheme: {
@@ -440,7 +440,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
                 content = parsed;
               }
             } catch {
-              // Not JSON — use as-is
+              // Not JSON - use as-is
               return { content };
             }
           }
@@ -472,9 +472,9 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
         const hasAnswers = input.answers && Object.keys(input.answers).length > 0;
         if (count === 1) {
           const header = input.questions[0]?.header || 'Question';
-          return hasAnswers ? `${header} — answered` : header;
+          return hasAnswers ? `${header} - answered` : header;
         }
-        return hasAnswers ? `${count} questions — answered` : `${count} questions`;
+        return hasAnswers ? `${count} questions - answered` : `${count} questions`;
       },
       defaultOpen: true,
       contentType: 'question-answer',
