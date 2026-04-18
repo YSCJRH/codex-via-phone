@@ -41,6 +41,10 @@ export interface ToolDisplayConfig {
   };
 }
 
+function getFilenameLabel(filePath?: string) {
+  return filePath?.split('/').pop() || filePath || 'file';
+}
+
 export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   // ============================================================================
   // COMMAND TOOLS
@@ -76,7 +80,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   Read: {
     input: {
       type: 'one-line',
-      label: 'Read',
+      label: 'Open file',
       getValue: (input) => input.file_path || '',
       action: 'open-file',
       colorScheme: {
@@ -94,10 +98,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   Edit: {
     input: {
       type: 'collapsible',
-      title: (input) => {
-        const filename = input.file_path?.split('/').pop() || input.file_path || 'file';
-        return `${filename}`;
-      },
+      title: (input) => `Edit ${getFilenameLabel(input.file_path)}`,
       defaultOpen: false,
       contentType: 'diff',
       actionButton: 'none',
@@ -117,10 +118,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   Write: {
     input: {
       type: 'collapsible',
-      title: (input) => {
-        const filename = input.file_path?.split('/').pop() || input.file_path || 'file';
-        return `${filename}`;
-      },
+      title: (input) => `Create ${getFilenameLabel(input.file_path)}`,
       defaultOpen: false,
       contentType: 'diff',
       actionButton: 'none',
@@ -140,10 +138,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   ApplyPatch: {
     input: {
       type: 'collapsible',
-      title: (input) => {
-        const filename = input.file_path?.split('/').pop() || input.file_path || 'file';
-        return `${filename}`;
-      },
+      title: (input) => `Patch ${getFilenameLabel(input.file_path)}`,
       defaultOpen: false,
       contentType: 'diff',
       actionButton: 'none',
@@ -167,7 +162,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   Grep: {
     input: {
       type: 'one-line',
-      label: 'Grep',
+      label: 'Search text',
       getValue: (input) => input.pattern,
       getSecondary: (input) => input.path ? `in ${input.path}` : undefined,
       action: 'jump-to-results',
@@ -185,7 +180,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       title: (result) => {
         const toolData = result.toolUseResult || {};
         const count = toolData.numFiles || toolData.filenames?.length || 0;
-        return `Found ${count} ${count === 1 ? 'file' : 'files'}`;
+        return `Matches in ${count} ${count === 1 ? 'file' : 'files'}`;
       },
       contentType: 'file-list',
       getContentProps: (result) => {
@@ -200,7 +195,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   Glob: {
     input: {
       type: 'one-line',
-      label: 'Glob',
+      label: 'Find files',
       getValue: (input) => input.pattern,
       getSecondary: (input) => input.path ? `in ${input.path}` : undefined,
       action: 'jump-to-results',
@@ -218,7 +213,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       title: (result) => {
         const toolData = result.toolUseResult || {};
         const count = toolData.numFiles || toolData.filenames?.length || 0;
-        return `Found ${count} ${count === 1 ? 'file' : 'files'}`;
+        return `Matched ${count} ${count === 1 ? 'file' : 'files'}`;
       },
       contentType: 'file-list',
       getContentProps: (result) => {
@@ -237,7 +232,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   TodoWrite: {
     input: {
       type: 'collapsible',
-      title: 'Updating todo list',
+      title: 'Update todo list',
       defaultOpen: false,
       contentType: 'todo-list',
       getContentProps: (input) => ({
@@ -254,8 +249,8 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   TodoRead: {
     input: {
       type: 'one-line',
-      label: 'TodoRead',
-      getValue: () => 'reading list',
+      label: 'Todo list',
+      getValue: () => 'open current list',
       action: 'none',
       colorScheme: {
         primary: 'text-gray-500 dark:text-gray-400',
@@ -288,7 +283,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   TaskCreate: {
     input: {
       type: 'one-line',
-      label: 'Task',
+      label: 'Create task',
       getValue: (input) => input.subject || 'Creating task',
       getSecondary: (input) => input.status || undefined,
       action: 'none',
@@ -306,7 +301,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   TaskUpdate: {
     input: {
       type: 'one-line',
-      label: 'Task',
+      label: 'Update task',
       getValue: (input) => {
         const parts = [];
         if (input.taskId) parts.push(`#${input.taskId}`);
@@ -329,8 +324,8 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   TaskList: {
     input: {
       type: 'one-line',
-      label: 'Tasks',
-      getValue: () => 'listing tasks',
+      label: 'Task list',
+      getValue: () => 'open current tasks',
       action: 'none',
       colorScheme: {
         primary: 'text-gray-500 dark:text-gray-400',
@@ -341,7 +336,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     result: {
       type: 'collapsible',
       defaultOpen: true,
-      title: 'Task list',
+      title: 'Current tasks',
       contentType: 'task',
       getContentProps: (result) => ({
         content: String(result?.content || '')
@@ -352,7 +347,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   TaskGet: {
     input: {
       type: 'one-line',
-      label: 'Task',
+      label: 'Task details',
       getValue: (input) => input.taskId ? `#${input.taskId}` : 'fetching',
       action: 'none',
       colorScheme: {
@@ -382,7 +377,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       title: (input) => {
         const subagentType = input.subagent_type || 'Agent';
         const description = input.description || 'Running task';
-        return `Subagent / ${subagentType}: ${description}`;
+        return `Subagent ${subagentType}: ${description}`;
       },
       defaultOpen: false,
       contentType: 'markdown',
@@ -425,7 +420,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     },
     result: {
       type: 'collapsible',
-      title: 'Subagent result',
+      title: 'Subagent output',
       defaultOpen: false,
       contentType: 'markdown',
       getContentProps: (result) => {
@@ -560,7 +555,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   Default: {
     input: {
       type: 'collapsible',
-      title: 'Parameters',
+      title: 'Raw details',
       defaultOpen: false,
       contentType: 'text',
       getContentProps: (input) => ({
