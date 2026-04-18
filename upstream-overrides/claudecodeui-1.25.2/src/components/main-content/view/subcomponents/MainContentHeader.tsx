@@ -1,12 +1,15 @@
 import {
   ChevronLeft,
+  Clock3,
   Ellipsis,
   Folder,
   GitBranch,
+  Link2,
   ListChecks,
   Menu,
   MessageSquareText,
   Puzzle,
+  ShieldAlert,
   Terminal,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -21,6 +24,31 @@ const MOBILE_TAB_META: Record<string, { label: string; icon: typeof MessageSquar
   git: { label: 'Git', icon: GitBranch },
   tasks: { label: 'Automation', icon: ListChecks },
 };
+
+function formatRelativeTime(value?: string | null) {
+  if (!value) {
+    return 'just now';
+  }
+
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return 'just now';
+  }
+
+  const diffMinutes = Math.max(0, Math.round((Date.now() - timestamp.getTime()) / 60000));
+  if (diffMinutes < 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 24 * 60) return `${Math.round(diffMinutes / 60)} hr ago`;
+  return `${Math.round(diffMinutes / (60 * 24))} d ago`;
+}
+
+function getProviderLabel(provider?: string | null) {
+  if (!provider) {
+    return 'CLAUDE';
+  }
+
+  return String(provider).toUpperCase();
+}
 
 export default function MainContentHeader({
   activeTab,
@@ -52,6 +80,10 @@ export default function MainContentHeader({
   const mobileSubtitle = activeTab === 'chat'
     ? (selectedProject.displayName || selectedProject.name)
     : `${mobileMeta.label} / ${selectedProject.displayName || selectedProject.name}`;
+  const mobileProviderLabel = getProviderLabel(selectedSession?.__provider);
+  const mobileActivityLabel = formatRelativeTime(selectedSession?.lastActivity || selectedSession?.createdAt || null);
+  const isRecoveredThread = selectedSession?.threadHealth === 'recovered';
+  const isReadOnlyThread = selectedSession?.__provider === 'codex' && selectedSession?.resumeSupported === false;
 
   const handleBack = () => {
     if (activeTab !== 'chat') {
@@ -92,6 +124,34 @@ export default function MainContentHeader({
             </div>
             <div className="mobile-clamp-1 mt-1 text-[12px] mobile-muted-text">
               {mobileSubtitle}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+              <span className="mobile-pill px-3 py-1 text-[11px] font-medium text-foreground">
+                {mobileMeta.label}
+              </span>
+              <span className="mobile-pill px-3 py-1 text-[11px] font-medium text-foreground">
+                {mobileProviderLabel}
+              </span>
+              {selectedSession ? (
+                <span className="mobile-pill inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-foreground">
+                  <Clock3 className="h-3.5 w-3.5 text-primary" />
+                  {mobileActivityLabel}
+                </span>
+              ) : null}
+              {isReadOnlyThread ? (
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium ${
+                  isRecoveredThread
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
+                    : 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200'
+                }`}>
+                  {isRecoveredThread ? (
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                  ) : (
+                    <Link2 className="h-3.5 w-3.5" />
+                  )}
+                  {isRecoveredThread ? 'Recovered' : 'Read only'}
+                </span>
+              ) : null}
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CheckCircle2, RefreshCcw } from 'lucide-react';
 import { IS_CODEX_ONLY_HARDENED } from '../../../constants/config';
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import { QuickSettingsPanel } from '../../quick-settings-panel';
@@ -489,32 +490,47 @@ function ChatInterface({
         />
 
         {showExternalSyncNotice && (
-          <div className="border-t border-border/50 bg-emerald-50/80 px-4 py-3 text-sm backdrop-blur-sm dark:bg-emerald-950/35">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">
-                  {t('sync.externalUpdate.title', {
-                    defaultValue: 'This thread was updated from another device',
-                  })}
-                </p>
-                <p className="text-muted-foreground">
-                  {t('sync.externalUpdate.body', {
-                    defaultValue: 'The desktop view has been synced to the latest turn, so you can continue from the newest message.',
-                  })}
-                </p>
+          <div className="px-3 pb-2 sm:px-4">
+            <div className="mx-auto max-w-4xl">
+              <div className="mobile-card mobile-shadow border-emerald-200/80 bg-emerald-50/88 px-4 py-3 backdrop-blur-sm dark:border-emerald-900/60 dark:bg-emerald-950/28">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/45 dark:text-emerald-200">
+                      <CheckCircle2 className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-foreground">
+                          {t('sync.externalUpdate.title', {
+                            defaultValue: 'This thread was updated from another device',
+                          })}
+                        </p>
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/45 dark:text-emerald-200">
+                          Synced
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                        {t('sync.externalUpdate.body', {
+                          defaultValue: 'The desktop view has been synced to the latest turn, so you can continue from the newest message.',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-emerald-100 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
+                    onClick={() => {
+                      scrollToBottomAndReset();
+                      setShowExternalSyncNotice(false);
+                    }}
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    {t('sync.externalUpdate.action', {
+                      defaultValue: 'Go to latest',
+                    })}
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-emerald-100 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
-                onClick={() => {
-                  scrollToBottomAndReset();
-                  setShowExternalSyncNotice(false);
-                }}
-              >
-                {t('sync.externalUpdate.action', {
-                  defaultValue: 'Go to latest',
-                })}
-              </button>
             </div>
           </div>
         )}
